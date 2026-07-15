@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -101,7 +101,7 @@ export default function ResetPasswordPage() {
             expired. Please request a new one from the login page.
           </p>
           
-           <a href="/forgot-password"
+            <a href="/forgot-password"
             className="mt-4 block text-center text-sm text-blue-600 hover:underline"
           >
             Request a new link
@@ -158,5 +158,13 @@ export default function ResetPasswordPage() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-gray-500">Loading...</div>}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
