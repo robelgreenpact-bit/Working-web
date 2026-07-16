@@ -59,6 +59,8 @@ export default function Navbar({ title }: { title: string }) {
     role === "admin" || role === "manager" || role === "finance";
   const canSeeReports =
     role === "admin" || role === "manager" || role === "finance";
+  const canSeeTaxRegistry =
+    role === "admin" || role === "manager" || role === "finance";
   const canSeeRegisterQueue = role === "accountant";
 
   return (
@@ -96,6 +98,14 @@ export default function Navbar({ title }: { title: string }) {
             Reports
           </a>
         ) : null}
+        {canSeeTaxRegistry ? (
+          <a
+            href="/admin/registrations"
+            className="text-sm font-medium text-brand-deep hover:underline"
+          >
+            Tax Registry
+          </a>
+        ) : null}
         {role === "admin" ? (
           <>
             <a
@@ -111,13 +121,6 @@ export default function Navbar({ title }: { title: string }) {
             >
               Users
             </a>
-
-            <a
-              href="/admin/registrations"
-              className="text-sm font-medium text-brand-deep hover:underline"
-            >
-              Tax Registry
-            </a>
           </>
         ) : null}
         {role === "manager" ? (
@@ -129,6 +132,7 @@ export default function Navbar({ title }: { title: string }) {
               Approvals
               <Badge count={badges.approvals || 0} />
             </a>
+
             <a
               href="/manager/payments"
               className="flex items-center text-sm font-medium text-brand-deep hover:underline"
