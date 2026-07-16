@@ -73,29 +73,29 @@ export default function Navbar({ title }: { title: string }) {
         />
         <h2 className="font-semibold text-brand-deep">{title}</h2>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <a
           href={homeHref}
           className="text-sm font-medium text-brand-deep hover:underline"
         >
           Dashboard
         </a>
-        {canSeeAssets && (
+        {canSeeAssets ? (
           <a
             href="/assets"
             className="text-sm font-medium text-brand-deep hover:underline"
           >
             Assets
           </a>
-        )}
-        {canSeeReports && (
-          
-            <a href="/reports"
+        ) : null}
+        {canSeeReports ? (
+          <a
+            href="/reports"
             className="text-sm font-medium text-brand-deep hover:underline"
           >
             Reports
           </a>
-        )}
+        ) : null}
         {role === "admin" ? (
           <>
             <a
@@ -129,7 +129,6 @@ export default function Navbar({ title }: { title: string }) {
               Approvals
               <Badge count={badges.approvals || 0} />
             </a>
-
             <a
               href="/manager/payments"
               className="flex items-center text-sm font-medium text-brand-deep hover:underline"
