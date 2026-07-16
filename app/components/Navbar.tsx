@@ -2,27 +2,56 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 function Badge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-bold text-white">
+    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-accent px-1 text-xs font-bold text-white">
       {count}
     </span>
   );
 }
 
+function NavLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    
+      <a href={href}
+      className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+        active
+          ? "bg-brand-deep text-white"
+          : "text-brand-deep hover:bg-brand/20"
+      }`}
+    >
+      {children}
+    </a>
+  );
+}
+
 export default function Navbar({ title }: { title: string }) {
+  void title;
   const router = useRouter();
+  const pathname = usePathname();
   const [role, setRole] = useState<string | null>(null);
+  const [name, setName] = useState<string | null>(null);
   const [badges, setBadges] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetch("/api/dashboard-role")
       .then((res) => res.json())
-      .then((data) => setRole(data.role || null))
+      .then((data) => {
+        setRole(data.role || null);
+        setName(data.name || null);
+      })
       .catch(() => {});
 
     const loadBadges = () => {
@@ -48,12 +77,12 @@ export default function Navbar({ title }: { title: string }) {
     role === "admin"
       ? "/admin"
       : role === "manager"
-        ? "/manager"
-        : role === "finance"
-          ? "/finance"
-          : role === "accountant"
-            ? "/accountant"
-            : "/worker";
+      ? "/manager"
+      : role === "finance"
+      ? "/finance"
+      : role === "accountant"
+      ? "/accountant"
+      : "/worker";
 
   const canSeeAssets =
     role === "admin" || role === "manager" || role === "finance";
@@ -63,123 +92,120 @@ export default function Navbar({ title }: { title: string }) {
     role === "admin" || role === "manager" || role === "finance";
   const canSeeRegisterQueue = role === "accountant";
 
+  const isActive = (path: string) => pathname === path;
+
   return (
-    <div className="flex items-center justify-between border-b border-brand-deep/10 bg-white px-8 py-4 shadow-sm">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-brand-deep/10 bg-white px-6 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
         <Image
           src="/logo.png"
           alt="Greenpact"
-          width={72}
-          height={72}
-          className="h-10 w-10  object-contain"
+          width={48}
+          height={48}
+          className="mr-2 h-12 w-12 object-contain"
         />
-        <h2 className="font-semibold text-brand-deep">{title}</h2>
-      </div>
-      <div className="flex flex-wrap items-center gap-4">
-        <a
-          href={homeHref}
-          className="text-sm font-medium text-brand-deep hover:underline"
-        >
+
+        <NavLink href={homeHref} active={isActive(homeHref)}>
           Dashboard
-        </a>
-        {canSeeAssets ? (
-          <a
-            href="/assets"
-            className="text-sm font-medium text-brand-deep hover:underline"
-          >
+        </NavLink>
+
+        {canSeeAssets && (
+          <NavLink href="/assets" active={isActive("/assets")}>
             Assets
-          </a>
-        ) : null}
-        {canSeeReports ? (
-          <a
-            href="/reports"
-            className="text-sm font-medium text-brand-deep hover:underline"
-          >
+          </NavLink>
+        )}
+
+        {canSeeReports && (
+          <NavLink href="/reports" active={isActive("/reports")}>
             Reports
-          </a>
-        ) : null}
-        {canSeeTaxRegistry ? (
-          <a
+          </NavLink>
+        )}
+
+        {canSeeTaxRegistry && (
+          <NavLink
             href="/admin/registrations"
-            className="text-sm font-medium text-brand-deep hover:underline"
+            active={isActive("/admin/registrations")}
           >
             Tax Registry
-          </a>
-        ) : null}
-        {role === "admin" ? (
+          </NavLink>
+        )}
+
+        {role === "admin" && (
           <>
-            <a
+            <NavLink
               href="/admin/requests"
-              className="text-sm font-medium text-brand-deep hover:underline"
+              active={isActive("/admin/requests")}
             >
               My Requests
-            </a>
-
-            <a
-              href="/admin/users"
-              className="text-sm font-medium text-brand-deep hover:underline"
-            >
+            </NavLink>
+            <NavLink href="/admin/users" active={isActive("/admin/users")}>
               Users
-            </a>
+            </NavLink>
           </>
-        ) : null}
-        {role === "manager" ? (
+        )}
+
+        {role === "manager" && (
           <>
-            <a
+            <NavLink
               href="/manager/approvals"
-              className="flex items-center text-sm font-medium text-brand-deep hover:underline"
+              active={isActive("/manager/approvals")}
             >
               Approvals
               <Badge count={badges.approvals || 0} />
-            </a>
-
-            <a
+            </NavLink>
+            <NavLink
               href="/manager/payments"
-              className="flex items-center text-sm font-medium text-brand-deep hover:underline"
+              active={isActive("/manager/payments")}
             >
               Payment Approvals
               <Badge count={badges.payments || 0} />
-            </a>
+            </NavLink>
           </>
-        ) : null}
-        {role === "finance" ? (
+        )}
+
+        {role === "finance" && (
           <>
-            <a
+            <NavLink
               href="/finance/approvals"
-              className="flex items-center text-sm font-medium text-brand-deep hover:underline"
+              active={isActive("/finance/approvals")}
             >
               Approvals
               <Badge count={badges.finance || 0} />
-            </a>
-
-            <a
+            </NavLink>
+            <NavLink
               href="/finance/payments"
-              className="text-sm font-medium text-brand-deep hover:underline"
+              active={isActive("/finance/payments")}
             >
               Payment Requests
-            </a>
+            </NavLink>
           </>
-        ) : null}
-        {canSeeRegisterQueue ? (
+        )}
+
+        {canSeeRegisterQueue && (
           <>
-            <a
+            <NavLink
               href="/accountant/requests"
-              className="text-sm font-medium text-brand-deep hover:underline"
+              active={isActive("/accountant/requests")}
             >
               My Requests
-            </a>
-
-            <a
+            </NavLink>
+            <NavLink
               href="/accountant/register"
-              className="text-sm font-medium text-brand-deep hover:underline"
+              active={isActive("/accountant/register")}
             >
               Register
-            </a>
+            </NavLink>
           </>
-        ) : null}
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        {name && (
+          <span className="text-sm font-medium text-gray-600">{name}</span>
+        )}
         <button
           onClick={handleLogout}
-          className="rounded bg-brand-deep/5 px-4 py-2 text-sm font-medium text-brand-deep hover:bg-brand-deep/10"
+          className="rounded-full bg-brand-deep px-4 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
         >
           Log Out
         </button>
