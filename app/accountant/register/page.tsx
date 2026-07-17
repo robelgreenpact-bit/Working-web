@@ -94,6 +94,23 @@ export default function AccountantRegisterPage() {
     loadQueue();
   };
 
+  const handleDeleteReceipt = async (id: string) => {
+    if (!confirm("Delete this receipt entry? This cannot be undone.")) return;
+
+    const res = await fetch(`/api/receipts/${id}`, {
+      method: "DELETE",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "Failed to delete receipt");
+      return;
+    }
+
+    loadQueue();
+  };
+
   const filteredItems = items.filter((i) =>
     showRegistered ? true : !i.tax_registered,
   );
@@ -167,9 +184,17 @@ export default function AccountantRegisterPage() {
                         {item.credited_party_name || "Unknown recipient"}
                       </p>
                     </div>
-                    <span className="text-sm font-medium text-gray-700">
-                      {item.amount} ETB
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-700">
+                        {item.amount} ETB
+                      </span>
+                      <button
+                        onClick={() => handleDeleteReceipt(item.id)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 )}
 
