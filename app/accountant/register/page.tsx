@@ -25,7 +25,18 @@ type PaymentItem = {
   creator: { name: string; email: string } | null;
 };
 
-type QueueItem = RequestItem | PaymentItem;
+type ReceiptItem = {
+  id: string;
+  kind: "receipt";
+  invoice_no: string | null;
+  payer_name: string | null;
+  credited_party_name: string | null;
+  amount: number;
+  tax_registered: boolean;
+  tax_reference: string | null;
+};
+
+type QueueItem = RequestItem | PaymentItem | ReceiptItem;
 
 export default function AccountantRegisterPage() {
   const [items, setItems] = useState<QueueItem[]>([]);
@@ -37,9 +48,13 @@ export default function AccountantRegisterPage() {
     setLoading(true);
     const res = await fetch("/api/accountant/queue");
     const data = await res.json();
+    const receiptsWithKind: ReceiptItem[] = (data.receipts || []).map(
+      (r: Omit<ReceiptItem, "kind">) => ({ ...r, kind: "receipt" as const }),
+    );
     const all: QueueItem[] = [
       ...(data.requests || []),
       ...(data.payments || []),
+      ...receiptsWithKind,
     ];
     setItems(all);
     setLoading(false);
@@ -49,13 +64,24 @@ export default function AccountantRegisterPage() {
     loadQueue();
   }, []);
 
-  const handleRegister = async (id: string, kind: "request" | "payment") => {
+  const handleRegister = async (
+    id: string,
+    kind: "request" | "payment" | "receipt",
+  ) => {
     const reference = refDrafts[id] || "";
 
-    const res = await fetch("/api/accountant/register", {
+    const endpoint =
+      kind === "receipt"
+        ? "/api/receipts/register"
+        : "/api/accountant/register";
+
+    const body =
+      kind === "receipt" ? { id, reference } : { id, kind, reference };
+
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, kind, reference }),
+      body: JSON.stringify(body),
     });
 
     const data = await res.json();
@@ -104,37 +130,47 @@ export default function AccountantRegisterPage() {
                 className="rounded-lg border-l-4 border-brand bg-white p-6 shadow"
               >
                 {item.kind === "request" ? (
-                  <>
-                    <div className="mb-2 flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold">{item.title}</h3>
-                        <p className="text-sm text-gray-500">
-                          Worker Request — {item.type.replace("_", " ")} — From{" "}
-                          {item.requester?.name || "Unknown"}
-                        </p>
-                      </div>
-                      <span className="text-sm font-medium text-gray-700">
-                        {item.estimated_cost} ETB
-                      </span>
+                  <div className="mb-2 flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold">{item.title}</h3>
+                      <p className="text-sm text-gray-500">
+                        Worker Request — {item.type.replace("_", " ")} — From{" "}
+                        {item.requester?.name || "Unknown"}
+                      </p>
                     </div>
-                  </>
+                    <span className="text-sm font-medium text-gray-700">
+                      {item.estimated_cost} ETB
+                    </span>
+                  </div>
+                ) : item.kind === "payment" ? (
+                  <div className="mb-2 flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold">
+                        PR #{item.pr_number} — {item.activity_line}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        Finance Payment — From {item.creator?.name || "Unknown"}
+                      </p>
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">
+                      {item.amount} ETB
+                    </span>
+                  </div>
                 ) : (
-                  <>
-                    <div className="mb-2 flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold">
-                          PR #{item.pr_number} — {item.activity_line}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          Finance Payment — From{" "}
-                          {item.creator?.name || "Unknown"}
-                        </p>
-                      </div>
-                      <span className="text-sm font-medium text-gray-700">
-                        {item.amount} ETB
-                      </span>
+                  <div className="mb-2 flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold">
+                        Receipt {item.invoice_no ? `#${item.invoice_no}` : ""}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {item.payer_name || "Unknown payer"} →{" "}
+                        {item.credited_party_name || "Unknown recipient"}
+                      </p>
                     </div>
-                  </>
+                    <span className="text-sm font-medium text-gray-700">
+                      {item.amount} ETB
+                    </span>
+                  </div>
                 )}
 
                 {item.tax_registered ? (
@@ -158,7 +194,7 @@ export default function AccountantRegisterPage() {
                     />
                     <button
                       onClick={() => handleRegister(item.id, item.kind)}
-                      className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
+                      className="rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
                     >
                       Mark Registered
                     </button>

@@ -26,8 +26,8 @@ function NavLink({
   children: React.ReactNode;
 }) {
   return (
-    
-     <a href={href}
+    <a
+      href={href}
       onClick={onClick}
       className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
         active
@@ -81,12 +81,12 @@ export default function Navbar({ title }: { title: string }) {
     role === "admin"
       ? "/admin"
       : role === "manager"
-      ? "/manager"
-      : role === "finance"
-      ? "/finance"
-      : role === "accountant"
-      ? "/accountant"
-      : "/worker";
+        ? "/manager"
+        : role === "finance"
+          ? "/finance"
+          : role === "accountant"
+            ? "/accountant"
+            : "/worker";
 
   const canSeeAssets =
     role === "admin" || role === "manager" || role === "finance";
@@ -106,13 +106,21 @@ export default function Navbar({ title }: { title: string }) {
       </NavLink>
 
       {canSeeAssets ? (
-        <NavLink href="/assets" active={isActive("/assets")} onClick={closeMenu}>
+        <NavLink
+          href="/assets"
+          active={isActive("/assets")}
+          onClick={closeMenu}
+        >
           Assets
         </NavLink>
       ) : null}
 
       {canSeeReports ? (
-        <NavLink href="/reports" active={isActive("/reports")} onClick={closeMenu}>
+        <NavLink
+          href="/reports"
+          active={isActive("/reports")}
+          onClick={closeMenu}
+        >
           Reports
         </NavLink>
       ) : null}
@@ -136,7 +144,18 @@ export default function Navbar({ title }: { title: string }) {
           >
             My Requests
           </NavLink>
-          <NavLink href="/admin/users" active={isActive("/admin/users")} onClick={closeMenu}>
+          <NavLink
+            href="/admin/receipts"
+            active={isActive("/admin/receipts")}
+            onClick={closeMenu}
+          >
+            Receipts
+          </NavLink>
+          <NavLink
+            href="/admin/users"
+            active={isActive("/admin/users")}
+            onClick={closeMenu}
+          >
             Users
           </NavLink>
         </>
@@ -239,11 +258,25 @@ export default function Navbar({ title }: { title: string }) {
             aria-label="Toggle menu"
           >
             {menuOpen ? (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
               </svg>
             ) : (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M3 12h18M3 6h18M3 18h18" strokeLinecap="round" />
               </svg>
             )}
