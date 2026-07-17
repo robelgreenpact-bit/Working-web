@@ -10,7 +10,6 @@ type Receipt = {
   payer_name: string | null;
   credited_party_name: string | null;
   amount: number;
-  payment_mode: string | null;
   signed_url: string | null;
   tax_registered: boolean;
 };
@@ -26,13 +25,9 @@ export default function AdminReceiptsPage() {
     invoice_no: "",
     payment_date: "",
     payer_name: "",
-    payer_account: "",
     credited_party_name: "",
-    credited_party_account: "",
     amount: "",
-    payment_mode: "",
     payment_reason: "",
-    payment_channel: "",
   });
   const [file, setFile] = useState<File | null>(null);
 
@@ -47,6 +42,19 @@ export default function AdminReceiptsPage() {
   useEffect(() => {
     loadReceipts();
   }, []);
+
+  const handleOpenForm = async () => {
+    if (showForm) {
+      setShowForm(false);
+      return;
+    }
+
+    const res = await fetch("/api/receipts/next-invoice");
+    const data = await res.json();
+
+    setForm((prev) => ({ ...prev, invoice_no: data.invoiceNo || "" }));
+    setShowForm(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,13 +84,9 @@ export default function AdminReceiptsPage() {
       invoice_no: "",
       payment_date: "",
       payer_name: "",
-      payer_account: "",
       credited_party_name: "",
-      credited_party_account: "",
       amount: "",
-      payment_mode: "",
       payment_reason: "",
-      payment_channel: "",
     });
     setFile(null);
     setShowForm(false);
@@ -98,7 +102,7 @@ export default function AdminReceiptsPage() {
             Receipt Registration
           </h1>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={handleOpenForm}
             className="rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
           >
             {showForm ? "Cancel" : "+ Register Receipt"}
@@ -161,20 +165,6 @@ export default function AdminReceiptsPage() {
 
               <div>
                 <label className="mb-1 block text-sm text-gray-600">
-                  Payer Account / Phone
-                </label>
-                <input
-                  type="text"
-                  value={form.payer_account}
-                  onChange={(e) =>
-                    setForm({ ...form, payer_account: e.target.value })
-                  }
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-gray-600">
                   Credited Party (Recipient)
                 </label>
                 <input
@@ -182,23 +172,6 @@ export default function AdminReceiptsPage() {
                   value={form.credited_party_name}
                   onChange={(e) =>
                     setForm({ ...form, credited_party_name: e.target.value })
-                  }
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-gray-600">
-                  Credited Party Account
-                </label>
-                <input
-                  type="text"
-                  value={form.credited_party_account}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      credited_party_account: e.target.value,
-                    })
                   }
                   className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
                 />
@@ -223,22 +196,7 @@ export default function AdminReceiptsPage() {
 
               <div>
                 <label className="mb-1 block text-sm text-gray-600">
-                  Payment Mode
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Telebirr, Bank, Cash"
-                  value={form.payment_mode}
-                  onChange={(e) =>
-                    setForm({ ...form, payment_mode: e.target.value })
-                  }
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-gray-600">
-                  Payment Reason
+                  Payment Reason (optional)
                 </label>
                 <input
                   type="text"
@@ -249,26 +207,11 @@ export default function AdminReceiptsPage() {
                   className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
                 />
               </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-gray-600">
-                  Payment Channel
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. API/App, Branch"
-                  value={form.payment_channel}
-                  onChange={(e) =>
-                    setForm({ ...form, payment_channel: e.target.value })
-                  }
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                />
-              </div>
             </div>
 
             <div className="mt-4">
               <label className="mb-1 block text-sm text-gray-600">
-                Receipt Photo/Scan
+                Receipt Photo/Scan (optional)
               </label>
               <input
                 type="file"
@@ -302,7 +245,6 @@ export default function AdminReceiptsPage() {
                     <th className="pb-2">Payer</th>
                     <th className="pb-2">Recipient</th>
                     <th className="pb-2">Amount</th>
-                    <th className="pb-2">Mode</th>
                     <th className="pb-2">Status</th>
                     <th className="pb-2">File</th>
                   </tr>
@@ -316,7 +258,6 @@ export default function AdminReceiptsPage() {
                         {r.credited_party_name || "—"}
                       </td>
                       <td className="py-2">{r.amount} ETB</td>
-                      <td className="py-2">{r.payment_mode || "—"}</td>
                       <td className="py-2">
                         {r.tax_registered ? (
                           <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">

@@ -28,7 +28,7 @@ export async function GET() {
         .from("attachments")
         .createSignedUrl(r.file_url, 60 * 10);
       return { ...r, signed_url: signedData?.signedUrl || null };
-    })
+    }),
   );
 
   return NextResponse.json({ receipts: withUrls });
@@ -59,15 +59,9 @@ export async function POST(request: Request) {
   const invoice_no = formData.get("invoice_no") as string;
   const payment_date = formData.get("payment_date") as string;
   const payer_name = formData.get("payer_name") as string;
-  const payer_account = formData.get("payer_account") as string;
   const credited_party_name = formData.get("credited_party_name") as string;
-  const credited_party_account = formData.get(
-    "credited_party_account"
-  ) as string;
   const amount = formData.get("amount") as string;
-  const payment_mode = formData.get("payment_mode") as string;
   const payment_reason = formData.get("payment_reason") as string;
-  const payment_channel = formData.get("payment_channel") as string;
   const file = formData.get("file") as File | null;
 
   if (!amount) {
@@ -93,13 +87,9 @@ export async function POST(request: Request) {
     invoice_no: invoice_no || null,
     payment_date: payment_date || null,
     payer_name: payer_name || null,
-    payer_account: payer_account || null,
     credited_party_name: credited_party_name || null,
-    credited_party_account: credited_party_account || null,
     amount: Number(amount),
-    payment_mode: payment_mode || null,
     payment_reason: payment_reason || null,
-    payment_channel: payment_channel || null,
     file_url,
     registered_by: user.id,
   });
