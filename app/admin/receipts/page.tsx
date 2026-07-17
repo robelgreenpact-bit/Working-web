@@ -128,10 +128,8 @@ export default function AdminReceiptsPage() {
                 <input
                   type="text"
                   value={form.invoice_no}
-                  onChange={(e) =>
-                    setForm({ ...form, invoice_no: e.target.value })
-                  }
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                  readOnly
+                  className="w-full rounded border border-gray-300 bg-gray-100 p-2 text-gray-600"
                 />
               </div>
 
@@ -187,9 +185,7 @@ export default function AdminReceiptsPage() {
                   step="0.01"
                   required
                   value={form.amount}
-                  onChange={(e) =>
-                    setForm({ ...form, amount: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
                   className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
                 />
               </div>
@@ -254,9 +250,7 @@ export default function AdminReceiptsPage() {
                     <tr key={r.id} className="border-b last:border-0">
                       <td className="py-2">{r.invoice_no || "—"}</td>
                       <td className="py-2">{r.payer_name || "—"}</td>
-                      <td className="py-2">
-                        {r.credited_party_name || "—"}
-                      </td>
+                      <td className="py-2">{r.credited_party_name || "—"}</td>
                       <td className="py-2">{r.amount} ETB</td>
                       <td className="py-2">
                         {r.tax_registered ? (
@@ -271,8 +265,8 @@ export default function AdminReceiptsPage() {
                       </td>
                       <td className="py-2">
                         {r.signed_url ? (
-                          
-                            <a href={r.signed_url}
+                          <a
+                            href={r.signed_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-brand-deep hover:underline"
