@@ -59,7 +59,6 @@ export async function GET() {
   const { data: receipts } = await supabase
     .from("receipts")
     .select("*")
-    .eq("tax_registered", false)
     .order("created_at", { ascending: false });
 
   return NextResponse.json({
