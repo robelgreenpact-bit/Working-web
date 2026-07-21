@@ -1,17 +1,42 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+const categoryPrefixes: Record<string, string> = {
+  electronics: "GPEL",
+  furniture: "GPFU",
+  vehicle: "GPVE",
+  office_supplies: "GPOF",
+  other: "GPOT",
+};
 
+async function generateAssetTag(
+  supabase: Awaited<
+    ReturnType<typeof import("@/lib/supabase/server").createClient>
+  >,
+  category: string,
+) {
+  const prefix = categoryPrefixes[category] || "GPOT";
+
+  const { data } = await supabase
+    .from("asset_tag_sequence")
+    .select("last_number")
+    .eq("category", category)
+    .single();
+
+  const next = (data?.last_number || 0) + 1;
+
+  await supabase
+    .from("asset_tag_sequence")
+    .update({ last_number: next })
+    .eq("category", category);
+
+  return `${prefix}${String(next).padStart(4, "0")}`;
+}
 function getServiceClient() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
-}
-
-function generateAssetTag() {
-  const random = Math.floor(100000 + Math.random() * 900000);
-  return `AST-${random}`;
 }
 
 export async function GET() {
@@ -77,6 +102,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const {
     category,
+    item_name,
     assigned_to,
     purchase_cost,
     purchase_date,
@@ -91,9 +117,12 @@ export async function POST(request: Request) {
     );
   }
 
+ const assetTag = await generateAssetTag(supabase, category);
+
   const { error } = await supabase.from("assets").insert({
-    asset_tag: generateAssetTag(),
+    asset_tag: assetTag,
     category,
+    item_name: item_name || null,
     assigned_to: assigned_to || null,
     purchase_cost: purchase_cost || null,
     purchase_date: purchase_date || null,

@@ -7,6 +7,7 @@ type Asset = {
   id: string;
   asset_tag: string;
   category: string;
+  item_name: string | null;
   assigned_to: string | null;
   assignee_name: string | null;
   purchase_cost: number | null;
@@ -37,6 +38,7 @@ export default function AssetsPage() {
 
   const [form, setForm] = useState({
     category: "",
+    item_name: "",
     assigned_to: "",
     purchase_cost: "",
     purchase_date: "",
@@ -65,6 +67,7 @@ export default function AssetsPage() {
 
   const canAdd = role === "admin" || role === "finance";
   const canEdit = role === "admin" || role === "finance";
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
@@ -89,6 +92,7 @@ export default function AssetsPage() {
 
     setForm({
       category: "",
+      item_name: "",
       assigned_to: "",
       purchase_cost: "",
       purchase_date: "",
@@ -122,7 +126,9 @@ export default function AssetsPage() {
       <Navbar title="Asset Registry" />
       <div className="mx-auto max-w-5xl p-8">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-brand-deep">Asset Registry</h1>
+          <h1 className="text-2xl font-bold text-brand-deep">
+            Asset Registry
+          </h1>
           {canAdd && (
             <button
               onClick={() => setShowForm(!showForm)}
@@ -140,14 +146,37 @@ export default function AssetsPage() {
           >
             <div>
               <label className="mb-1 block text-sm text-gray-600">
-                Category / Item Name
+                Category
+              </label>
+              <select
+                required
+                value={form.category}
+                onChange={(e) =>
+                  setForm({ ...form, category: e.target.value })
+                }
+                className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+              >
+                <option value="">— Select category —</option>
+                <option value="electronics">Electronics</option>
+                <option value="furniture">Furniture</option>
+                <option value="vehicle">Vehicle</option>
+                <option value="office_supplies">Office Supplies</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-gray-600">
+                Item Name
               </label>
               <input
                 type="text"
                 required
                 placeholder="e.g. Dell Laptop, Office Chair"
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                value={form.item_name}
+                onChange={(e) =>
+                  setForm({ ...form, item_name: e.target.value })
+                }
                 className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
               />
             </div>
@@ -202,7 +231,9 @@ export default function AssetsPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">Status</label>
+              <label className="mb-1 block text-sm text-gray-600">
+                Status
+              </label>
               <select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
@@ -222,7 +253,9 @@ export default function AssetsPage() {
                 type="text"
                 placeholder="e.g. Main Office, Field Site A"
                 value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, location: e.target.value })
+                }
                 className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
               />
             </div>
@@ -263,7 +296,7 @@ export default function AssetsPage() {
               <thead>
                 <tr className="border-b text-gray-500">
                   <th className="pb-2">Tag</th>
-                  <th className="pb-2">Category</th>
+                  <th className="pb-2">Item</th>
                   <th className="pb-2">Assigned To</th>
                   <th className="pb-2">Cost</th>
                   <th className="pb-2">Location</th>
@@ -275,7 +308,12 @@ export default function AssetsPage() {
                 {filteredAssets.map((a) => (
                   <tr key={a.id} className="border-b last:border-0">
                     <td className="py-2 font-mono text-xs">{a.asset_tag}</td>
-                    <td className="py-2">{a.category}</td>
+                    <td className="py-2">
+                      {a.item_name}
+                      <span className="ml-1 text-xs text-gray-400">
+                        ({a.category.replace("_", " ")})
+                      </span>
+                    </td>
                     <td className="py-2">{a.assignee_name || "—"}</td>
                     <td className="py-2">
                       {a.purchase_cost ? `${a.purchase_cost} ETB` : "—"}
