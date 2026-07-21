@@ -35,6 +35,7 @@ export default function AssetsPage() {
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     category: "",
@@ -72,21 +73,29 @@ export default function AssetsPage() {
     e.preventDefault();
     setCreating(true);
 
-    const res = await fetch("/api/assets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        purchase_cost: form.purchase_cost ? Number(form.purchase_cost) : null,
-        assigned_to: form.assigned_to || null,
-      }),
-    });
+    const payload = {
+      ...form,
+      purchase_cost: form.purchase_cost ? Number(form.purchase_cost) : null,
+      assigned_to: form.assigned_to || null,
+    };
+
+    const res = editingId
+      ? await fetch(`/api/assets/${editingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+      : await fetch("/api/assets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
     const data = await res.json();
     setCreating(false);
 
     if (!res.ok) {
-      alert(data.error || "Failed to add asset");
+      alert(data.error || "Failed to save asset");
       return;
     }
 
@@ -99,8 +108,37 @@ export default function AssetsPage() {
       status: "in_use",
       location: "",
     });
+    setEditingId(null);
     setShowForm(false);
     loadAssets();
+  };
+
+  const handleEditClick = (asset: Asset) => {
+    setForm({
+      category: asset.category,
+      item_name: asset.item_name || "",
+      assigned_to: asset.assigned_to || "",
+      purchase_cost: asset.purchase_cost ? String(asset.purchase_cost) : "",
+      purchase_date: asset.purchase_date || "",
+      status: asset.status,
+      location: asset.location || "",
+    });
+    setEditingId(asset.id);
+    setShowForm(true);
+  };
+
+  const handleCancelForm = () => {
+    setForm({
+      category: "",
+      item_name: "",
+      assigned_to: "",
+      purchase_cost: "",
+      purchase_date: "",
+      status: "in_use",
+      location: "",
+    });
+    setEditingId(null);
+    setShowForm(false);
   };
 
   const handleStatusChange = async (id: string, status: string) => {
@@ -129,7 +167,9 @@ export default function AssetsPage() {
           <h1 className="text-2xl font-bold text-brand-deep">Asset Registry</h1>
           {canAdd && (
             <button
-              onClick={() => setShowForm(!showForm)}
+              onClick={() =>
+                showForm ? handleCancelForm() : setShowForm(true)
+              }
               className="rounded bg-brand-deep px-4 py-2 font-medium text-white transition hover:bg-brand-dark"
             >
               {showForm ? "Cancel" : "+ Add Asset"}
@@ -259,7 +299,11 @@ export default function AssetsPage() {
               disabled={creating}
               className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50 sm:col-span-2"
             >
-              {creating ? "Adding..." : "Add Asset"}
+              {creating
+                ? "Saving..."
+                : editingId
+                  ? "Update Asset"
+                  : "Add Asset"}
             </button>
           </form>
         )}
@@ -357,12 +401,20 @@ export default function AssetsPage() {
                     </td>
                     {canEdit && (
                       <td className="py-2">
-                        <button
-                          onClick={() => handleDelete(a.id)}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleEditClick(a)}
+                            className="text-xs text-brand-deep hover:underline"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(a.id)}
+                            className="text-xs text-red-600 hover:underline"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>

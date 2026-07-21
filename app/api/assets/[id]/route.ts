@@ -29,13 +29,13 @@ export async function PATCH(
   const body = await request.json();
   const allowedFields = [
     "category",
+    "item_name",
     "assigned_to",
     "purchase_cost",
     "purchase_date",
     "status",
     "location",
   ];
-
   const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (field in body) updates[field] = body[field];
