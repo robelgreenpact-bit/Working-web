@@ -22,6 +22,7 @@ type UserOption = {
 };
 
 const statusColors: Record<string, string> = {
+  new: "bg-blue-100 text-blue-800",
   in_use: "bg-green-100 text-green-800",
   under_repair: "bg-amber-100 text-amber-800",
   retired: "bg-gray-200 text-gray-600",
@@ -43,7 +44,7 @@ export default function AssetsPage() {
     assigned_to: "",
     purchase_cost: "",
     purchase_date: "",
-    status: "in_use",
+    status: "new",
     location: "",
   });
 
@@ -273,6 +274,7 @@ export default function AssetsPage() {
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
                 className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
               >
+                <option value="new">New</option>
                 <option value="in_use">In Use</option>
                 <option value="under_repair">Under Repair</option>
                 <option value="retired">Retired</option>
@@ -326,7 +328,7 @@ export default function AssetsPage() {
           </button>
         </div>
         <div className="mb-4 flex gap-2">
-          {["all", "in_use", "under_repair", "retired"].map((f) => (
+          {["all", "new", "in_use", "under_repair", "retired"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -385,6 +387,7 @@ export default function AssetsPage() {
                             statusColors[a.status]
                           }`}
                         >
+                          <option value="new">New</option>
                           <option value="in_use">In Use</option>
                           <option value="under_repair">Under Repair</option>
                           <option value="retired">Retired</option>
