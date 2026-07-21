@@ -126,9 +126,7 @@ export default function AssetsPage() {
       <Navbar title="Asset Registry" />
       <div className="mx-auto max-w-5xl p-8">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-brand-deep">
-            Asset Registry
-          </h1>
+          <h1 className="text-2xl font-bold text-brand-deep">Asset Registry</h1>
           {canAdd && (
             <button
               onClick={() => setShowForm(!showForm)}
@@ -151,9 +149,7 @@ export default function AssetsPage() {
               <select
                 required
                 value={form.category}
-                onChange={(e) =>
-                  setForm({ ...form, category: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
                 className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
               >
                 <option value="">— Select category —</option>
@@ -231,9 +227,7 @@ export default function AssetsPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">
-                Status
-              </label>
+              <label className="mb-1 block text-sm text-gray-600">Status</label>
               <select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
@@ -249,15 +243,15 @@ export default function AssetsPage() {
               <label className="mb-1 block text-sm text-gray-600">
                 Location
               </label>
-              <input
-                type="text"
-                placeholder="e.g. Main Office, Field Site A"
+              <select
                 value={form.location}
-                onChange={(e) =>
-                  setForm({ ...form, location: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
                 className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-              />
+              >
+                <option value="">— Select location —</option>
+                <option value="Bahir Dar Office">Bahir Dar Office</option>
+                <option value="Addis Ababa Office">Addis Ababa Office</option>
+              </select>
             </div>
 
             <button
@@ -269,7 +263,24 @@ export default function AssetsPage() {
             </button>
           </form>
         )}
-
+        <div className="mb-4 flex gap-3">
+          <button
+            onClick={() =>
+              (window.location.href = "/api/reports/assets?format=xlsx")
+            }
+            className="rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
+          >
+            Download Excel
+          </button>
+          <button
+            onClick={() =>
+              (window.location.href = "/api/reports/assets?format=docx")
+            }
+            className="rounded-full bg-gray-200 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-300"
+          >
+            Download Word
+          </button>
+        </div>
         <div className="mb-4 flex gap-2">
           {["all", "in_use", "under_repair", "retired"].map((f) => (
             <button
