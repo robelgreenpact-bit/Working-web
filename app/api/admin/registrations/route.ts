@@ -43,6 +43,10 @@ export async function GET() {
     .select("*")
     .eq("status", "paid")
     .order("updated_at", { ascending: false });
+  const { data: receipts } = await serviceClient
+    .from("receipts")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   const requestsWithNames = await Promise.all(
     (requests || []).map(async (r) => {
@@ -66,8 +70,14 @@ export async function GET() {
     }),
   );
 
+  const receiptsFormatted = (receipts || []).map((r) => ({
+    ...r,
+    kind: "receipt",
+  }));
+
   return NextResponse.json({
     requests: requestsWithNames,
     payments: paymentsWithNames,
+    receipts: receiptsFormatted,
   });
 }

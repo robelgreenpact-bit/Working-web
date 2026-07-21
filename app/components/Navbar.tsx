@@ -144,13 +144,7 @@ export default function Navbar({ title }: { title: string }) {
           >
             My Requests
           </NavLink>
-          <NavLink
-            href="/admin/receipts"
-            active={isActive("/admin/receipts")}
-            onClick={closeMenu}
-          >
-            Receipts
-          </NavLink>
+
           <NavLink
             href="/admin/users"
             active={isActive("/admin/users")}
