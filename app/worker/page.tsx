@@ -12,6 +12,13 @@ type RequestRow = {
   created_at: string;
 };
 
+type BorrowedAsset = {
+  id: string;
+  asset_tag: string;
+  item_name: string | null;
+  return_requested: boolean;
+};
+
 const statusLabels: Record<string, string> = {
   pending_manager: "Pending Manager",
   pending_finance: "Pending Finance",
@@ -29,6 +36,7 @@ const statusColors: Record<string, string> = {
 export default function WorkerPage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [borrowedAssets, setBorrowedAssets] = useState<BorrowedAsset[]>([]);
 
   useEffect(() => {
     fetch("/api/requests")
@@ -37,12 +45,63 @@ export default function WorkerPage() {
         setRequests(data.requests || []);
         setLoading(false);
       });
+
+    fetch("/api/assets/my-borrowed")
+      .then((res) => res.json())
+      .then((data) => setBorrowedAssets(data.assets || []))
+      .catch(() => {});
   }, []);
+
+  const handleRequestReturn = async (assetId: string) => {
+    const res = await fetch(`/api/assets/${assetId}/return-request`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to request return");
+      return;
+    }
+    fetch("/api/assets/my-borrowed")
+      .then((r) => r.json())
+      .then((d) => setBorrowedAssets(d.assets || []));
+  };
 
   return (
     <div>
       <Navbar title="Worker Dashboard" />
       <div className="mx-auto max-w-4xl p-8">
+        {borrowedAssets.length > 0 && (
+          <div className="mb-6 rounded-lg border-t-4 border-brand bg-white p-6 shadow">
+            <h2 className="mb-3 text-lg font-semibold text-brand-deep">
+              Items You&apos;ve Borrowed
+            </h2>
+            <div className="space-y-2">
+              {borrowedAssets.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between rounded border border-gray-200 p-3 text-sm"
+                >
+                  <span>
+                    {a.item_name} ({a.asset_tag})
+                  </span>
+                  {a.return_requested ? (
+                    <span className="text-xs text-amber-700">
+                      Return requested — awaiting confirmation
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleRequestReturn(a.id)}
+                      className="rounded bg-brand-deep px-3 py-1 text-xs font-medium text-white transition hover:bg-brand-dark"
+                    >
+                      I Returned This
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-brand-deep">My Requests</h1>
           

@@ -10,6 +10,9 @@ type Asset = {
   item_name: string | null;
   assigned_to: string | null;
   assignee_name: string | null;
+  borrowed_by: string | null;
+  borrower_name: string | null;
+  return_requested: boolean;
   purchase_cost: number | null;
   purchase_date: string | null;
   status: string;
@@ -70,6 +73,19 @@ export default function AssetsPage() {
   const canAdd = role === "admin" || role === "finance";
   const canEdit = role === "admin" || role === "finance";
 
+  const resetForm = () => {
+    setForm({
+      category: "",
+      item_name: "",
+      assigned_to: "",
+      purchase_cost: "",
+      purchase_date: "",
+      status: "new",
+      location: "",
+    });
+    setEditingId(null);
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
@@ -100,16 +116,7 @@ export default function AssetsPage() {
       return;
     }
 
-    setForm({
-      category: "",
-      item_name: "",
-      assigned_to: "",
-      purchase_cost: "",
-      purchase_date: "",
-      status: "in_use",
-      location: "",
-    });
-    setEditingId(null);
+    resetForm();
     setShowForm(false);
     loadAssets();
   };
@@ -129,16 +136,7 @@ export default function AssetsPage() {
   };
 
   const handleCancelForm = () => {
-    setForm({
-      category: "",
-      item_name: "",
-      assigned_to: "",
-      purchase_cost: "",
-      purchase_date: "",
-      status: "in_use",
-      location: "",
-    });
-    setEditingId(null);
+    resetForm();
     setShowForm(false);
   };
 
@@ -154,6 +152,19 @@ export default function AssetsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this asset record? This cannot be undone.")) return;
     await fetch(`/api/assets/${id}`, { method: "DELETE" });
+    loadAssets();
+  };
+
+  const handleConfirmReturn = async (id: string) => {
+    if (!confirm("Confirm this asset has been returned?")) return;
+    const res = await fetch(`/api/assets/${id}/confirm-return`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to confirm return");
+      return;
+    }
     loadAssets();
   };
 
@@ -309,7 +320,8 @@ export default function AssetsPage() {
             </button>
           </form>
         )}
-        <div className="mb-4 flex gap-3">
+
+        <div className="mb-4 flex flex-wrap gap-3">
           <button
             onClick={() =>
               (window.location.href = "/api/reports/assets?format=xlsx")
@@ -327,6 +339,7 @@ export default function AssetsPage() {
             Download Word
           </button>
         </div>
+
         <div className="mb-4 flex gap-2">
           {["all", "new", "in_use", "under_repair", "retired"].map((f) => (
             <button
@@ -349,81 +362,106 @@ export default function AssetsPage() {
           ) : filteredAssets.length === 0 ? (
             <p className="text-gray-500">No assets found.</p>
           ) : (
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b text-gray-500">
-                  <th className="pb-2">Tag</th>
-                  <th className="pb-2">Item</th>
-                  <th className="pb-2">Assigned To</th>
-                  <th className="pb-2">Cost</th>
-                  <th className="pb-2">Location</th>
-                  <th className="pb-2">Status</th>
-                  {canEdit && <th className="pb-2"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAssets.map((a) => (
-                  <tr key={a.id} className="border-b last:border-0">
-                    <td className="py-2 font-mono text-xs">{a.asset_tag}</td>
-                    <td className="py-2">
-                      {a.item_name}
-                      <span className="ml-1 text-xs text-gray-400">
-                        ({a.category.replace("_", " ")})
-                      </span>
-                    </td>
-                    <td className="py-2">{a.assignee_name || "—"}</td>
-                    <td className="py-2">
-                      {a.purchase_cost ? `${a.purchase_cost} ETB` : "—"}
-                    </td>
-                    <td className="py-2">{a.location || "—"}</td>
-                    <td className="py-2">
-                      {canEdit ? (
-                        <select
-                          value={a.status}
-                          onChange={(e) =>
-                            handleStatusChange(a.id, e.target.value)
-                          }
-                          className={`rounded border-0 px-2 py-1 text-xs ${
-                            statusColors[a.status]
-                          }`}
-                        >
-                          <option value="new">New</option>
-                          <option value="in_use">In Use</option>
-                          <option value="under_repair">Under Repair</option>
-                          <option value="retired">Retired</option>
-                        </select>
-                      ) : (
-                        <span
-                          className={`rounded px-2 py-1 text-xs ${
-                            statusColors[a.status]
-                          }`}
-                        >
-                          {a.status.replace("_", " ")}
-                        </span>
-                      )}
-                    </td>
-                    {canEdit && (
-                      <td className="py-2">
-                        <div className="flex gap-3">
-                          <button
-                            onClick={() => handleEditClick(a)}
-                            className="text-xs text-brand-deep hover:underline"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(a.id)}
-                            className="text-xs text-red-600 hover:underline"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b text-gray-500">
+                    <th className="pb-2">Tag</th>
+                    <th className="pb-2">Item</th>
+                    <th className="pb-2">Assigned To</th>
+                    <th className="pb-2">Borrowed By</th>
+                    <th className="pb-2">Cost</th>
+                    <th className="pb-2">Location</th>
+                    <th className="pb-2">Status</th>
+                    {canEdit && <th className="pb-2"></th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredAssets.map((a) => (
+                    <tr key={a.id} className="border-b last:border-0">
+                      <td className="py-2 font-mono text-xs">{a.asset_tag}</td>
+                      <td className="py-2">
+                        {a.item_name}
+                        <span className="ml-1 text-xs text-gray-400">
+                          ({a.category.replace("_", " ")})
+                        </span>
+                      </td>
+                      <td className="py-2">{a.assignee_name || "—"}</td>
+                      <td className="py-2">
+                        {a.borrower_name ? (
+                          <div>
+                            <span>{a.borrower_name}</span>
+                            {a.return_requested && (
+                              <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                                Return requested
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="py-2">
+                        {a.purchase_cost ? `${a.purchase_cost} ETB` : "—"}
+                      </td>
+                      <td className="py-2">{a.location || "—"}</td>
+                      <td className="py-2">
+                        {canEdit ? (
+                          <select
+                            value={a.status}
+                            onChange={(e) =>
+                              handleStatusChange(a.id, e.target.value)
+                            }
+                            className={`rounded border-0 px-2 py-1 text-xs ${
+                              statusColors[a.status]
+                            }`}
+                          >
+                            <option value="new">New</option>
+                            <option value="in_use">In Use</option>
+                            <option value="under_repair">Under Repair</option>
+                            <option value="retired">Retired</option>
+                          </select>
+                        ) : (
+                          <span
+                            className={`rounded px-2 py-1 text-xs ${
+                              statusColors[a.status]
+                            }`}
+                          >
+                            {a.status.replace("_", " ")}
+                          </span>
+                        )}
+                      </td>
+                      {canEdit && (
+                        <td className="py-2">
+                          <div className="flex flex-wrap gap-3">
+                            <button
+                              onClick={() => handleEditClick(a)}
+                              className="text-xs text-brand-deep hover:underline"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(a.id)}
+                              className="text-xs text-red-600 hover:underline"
+                            >
+                              Delete
+                            </button>
+                            {a.borrowed_by && (
+                              <button
+                                onClick={() => handleConfirmReturn(a.id)}
+                                className="text-xs text-green-700 hover:underline"
+                              >
+                                Confirm Return
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

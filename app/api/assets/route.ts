@@ -71,7 +71,18 @@ export async function GET() {
           .single();
         assigneeName = assignee?.name || null;
       }
-      return { ...a, assignee_name: assigneeName };
+
+      let borrowerName = null;
+      if (a.borrowed_by) {
+        const { data: borrower } = await serviceClient
+          .from("public_users")
+          .select("name")
+          .eq("id", a.borrowed_by)
+          .single();
+        borrowerName = borrower?.name || null;
+      }
+
+      return { ...a, assignee_name: assigneeName, borrower_name: borrowerName };
     }),
   );
 
@@ -117,7 +128,7 @@ export async function POST(request: Request) {
     );
   }
 
- const assetTag = await generateAssetTag(supabase, category);
+  const assetTag = await generateAssetTag(supabase, category);
 
   const { error } = await supabase.from("assets").insert({
     asset_tag: assetTag,

@@ -35,9 +35,16 @@ type HistoryRow = RequestRow & {
   }[];
 };
 
+type AvailableAsset = {
+  id: string;
+  asset_tag: string;
+  item_name: string | null;
+  category: string;
+};
+
 function daysAgo(dateStr: string) {
   const days = Math.floor(
-    (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24),
+    (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24)
   );
   if (days === 0) return "Today";
   if (days === 1) return "1 day ago";
@@ -50,9 +57,13 @@ export default function FinancePage() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>(
-    {},
+    {}
   );
   const [processing, setProcessing] = useState<string | null>(null);
+  const [availableAssets, setAvailableAssets] = useState<AvailableAsset[]>([]);
+  const [inventoryChoice, setInventoryChoice] = useState<
+    Record<string, string>
+  >({});
 
   const loadData = async () => {
     setLoading(true);
@@ -73,19 +84,26 @@ export default function FinancePage() {
   useEffect(() => {
     loadData();
     loadHistory();
+    fetch("/api/assets/available")
+      .then((res) => res.json())
+      .then((data) => setAvailableAssets(data.assets || []))
+      .catch(() => {});
   }, []);
 
   const handleDecision = async (
     id: string,
-    decision: "approved" | "rejected",
+    decision: "approved" | "rejected"
   ) => {
     setProcessing(id);
+    const chosenAssetId = inventoryChoice[id];
     const res = await fetch(`/api/finance/requests/${id}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         decision,
         comment: commentDrafts[id] || "",
+        issueFromInventory: !!chosenAssetId,
+        assetId: chosenAssetId || null,
       }),
     });
 
@@ -140,7 +158,9 @@ export default function FinancePage() {
                 </div>
 
                 {r.description && (
-                  <p className="mb-2 text-sm text-gray-700">{r.description}</p>
+                  <p className="mb-2 text-sm text-gray-700">
+                    {r.description}
+                  </p>
                 )}
 
                 <div className="mb-2 flex gap-6 text-sm text-gray-700">
@@ -165,8 +185,8 @@ export default function FinancePage() {
                       {r.attachments.map((a) => (
                         <li key={a.id}>
                           {a.signed_url ? (
-                            <a
-                              href={a.signed_url}
+                            
+                             <a href={a.signed_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-brand-deep hover:underline"
@@ -181,6 +201,31 @@ export default function FinancePage() {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+
+                {(r.type === "physical_good" || r.type === "other_asset") && (
+                  <div className="mb-3">
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Fulfill from Inventory (optional)
+                    </label>
+                    <select
+                      value={inventoryChoice[r.id] || ""}
+                      onChange={(e) =>
+                        setInventoryChoice({
+                          ...inventoryChoice,
+                          [r.id]: e.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                    >
+                      <option value="">— Buy new instead —</option>
+                      {availableAssets.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.asset_tag} — {a.item_name} ({a.category})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
@@ -248,8 +293,8 @@ export default function FinancePage() {
                       r.status === "rejected"
                         ? "bg-red-100 text-red-800"
                         : r.status === "approved"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-blue-100 text-blue-800"
+                        ? "bg-green-100 text-green-800"
+                        : "bg-blue-100 text-blue-800"
                     }`}
                   >
                     {r.status.replace("_", " ")}
