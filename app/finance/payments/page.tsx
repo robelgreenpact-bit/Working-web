@@ -419,14 +419,24 @@ export default function FinancePaymentsPage() {
                     </p>
                   )}
 
-                  {r.status === "approved" && (
+                  <div className="mt-2 flex gap-2">
+                    {r.status === "approved" && (
+                      <button
+                        onClick={() => handleMarkPaid(r.id)}
+                        className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
+                      >
+                        Mark as Paid
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleMarkPaid(r.id)}
-                      className="mt-2 rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
+                      onClick={() =>
+                        (window.location.href = `/api/payment-requests/${r.id}/download`)
+                      }
+                      className="rounded bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300"
                     >
-                      Mark as Paid
+                      Download PR
                     </button>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>

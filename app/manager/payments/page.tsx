@@ -145,7 +145,16 @@ export default function ManagerPaymentsPage() {
                 <p className="mb-3 text-right text-sm font-semibold text-gray-800">
                   Total: {r.amount} ETB
                 </p>
-
+                <div className="mb-3 flex justify-end">
+                  <button
+                    onClick={() =>
+                      (window.location.href = `/api/payment-requests/${r.id}/download`)
+                    }
+                    className="rounded bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300"
+                  >
+                    Download PR
+                  </button>
+                </div>
                 <textarea
                   placeholder="Optional comment..."
                   value={comment[r.id] || ""}
