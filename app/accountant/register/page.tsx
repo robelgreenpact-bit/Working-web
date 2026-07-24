@@ -94,6 +94,40 @@ export default function AccountantRegisterPage() {
     loadQueue();
   };
 
+  const handleDeleteRequest = async (id: string) => {
+    if (!confirm("Remove this request from tax registry queue?")) return;
+
+    const res = await fetch(`/api/requests/${id}/tax-registry`, {
+      method: "DELETE",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "Failed to remove request");
+      return;
+    }
+
+    loadQueue();
+  };
+
+  const handleDeletePayment = async (id: string) => {
+    if (!confirm("Remove this payment from tax registry queue?")) return;
+
+    const res = await fetch(`/api/payment-requests/${id}/tax-registry`, {
+      method: "DELETE",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "Failed to remove payment");
+      return;
+    }
+
+    loadQueue();
+  };
+
   const handleDeleteReceipt = async (id: string) => {
     if (!confirm("Delete this receipt entry? This cannot be undone.")) return;
 
@@ -155,9 +189,17 @@ export default function AccountantRegisterPage() {
                         {item.requester?.name || "Unknown"}
                       </p>
                     </div>
-                    <span className="text-sm font-medium text-gray-700">
-                      {item.estimated_cost} ETB
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-700">
+                        {item.estimated_cost} ETB
+                      </span>
+                      <button
+                        onClick={() => handleDeleteRequest(item.id)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ) : item.kind === "payment" ? (
                   <div className="mb-2 flex items-start justify-between">
@@ -169,9 +211,17 @@ export default function AccountantRegisterPage() {
                         Finance Payment — From {item.creator?.name || "Unknown"}
                       </p>
                     </div>
-                    <span className="text-sm font-medium text-gray-700">
-                      {item.amount} ETB
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-700">
+                        {item.amount} ETB
+                      </span>
+                      <button
+                        onClick={() => handleDeletePayment(item.id)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="mb-2 flex items-start justify-between">

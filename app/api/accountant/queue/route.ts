@@ -33,6 +33,7 @@ export async function GET() {
     .from("payment_requests")
     .select("*, payment_request_items(*)")
     .eq("status", "paid")
+    .eq("for_tax_registry", true)
     .order("updated_at", { ascending: false });
 
   const requestsWithNames = await Promise.all(
