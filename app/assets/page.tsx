@@ -175,14 +175,17 @@ export default function AssetsPage() {
     <div>
       <Navbar title="Asset Registry" />
       <div className="mx-auto max-w-5xl p-8">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-brand-deep">Asset Registry</h1>
+        <div className="mb-8 flex items-center justify-between fade-in">
+          <div>
+            <h1 className="text-3xl font-bold text-brand-deep">Asset Registry</h1>
+            <p className="mt-1 text-sm text-gray-500">Manage and track all company assets</p>
+          </div>
           {canAdd && (
             <button
               onClick={() =>
                 showForm ? handleCancelForm() : setShowForm(true)
               }
-              className="rounded bg-brand-deep px-4 py-2 font-medium text-white transition hover:bg-brand-dark"
+              className="rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
             >
               {showForm ? "Cancel" : "+ Add Asset"}
             </button>
@@ -192,17 +195,17 @@ export default function AssetsPage() {
         {showForm && (
           <form
             onSubmit={handleCreate}
-            className="mb-6 grid grid-cols-1 gap-3 rounded-lg border-t-4 border-brand bg-white p-6 shadow sm:grid-cols-2"
+            className="mb-8 grid grid-cols-1 gap-4 rounded-2xl border-t-4 border-brand bg-white/95 backdrop-blur-sm p-8 shadow-xl fade-in sm:grid-cols-2"
           >
             <div>
-              <label className="mb-1 block text-sm text-gray-600">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Category
               </label>
               <select
                 required
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               >
                 <option value="">— Select category —</option>
                 <option value="electronics">Electronics</option>
@@ -214,7 +217,7 @@ export default function AssetsPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Item Name
               </label>
               <input
@@ -225,12 +228,12 @@ export default function AssetsPage() {
                 onChange={(e) =>
                   setForm({ ...form, item_name: e.target.value })
                 }
-                className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Assigned To
               </label>
               <select
@@ -238,7 +241,7 @@ export default function AssetsPage() {
                 onChange={(e) =>
                   setForm({ ...form, assigned_to: e.target.value })
                 }
-                className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               >
                 <option value="">— Unassigned —</option>
                 {users.map((u) => (
@@ -250,7 +253,7 @@ export default function AssetsPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Purchase Cost (ETB)
               </label>
               <input
@@ -260,12 +263,12 @@ export default function AssetsPage() {
                 onChange={(e) =>
                   setForm({ ...form, purchase_cost: e.target.value })
                 }
-                className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Purchase Date
               </label>
               <input
@@ -274,16 +277,16 @@ export default function AssetsPage() {
                 onChange={(e) =>
                   setForm({ ...form, purchase_date: e.target.value })
                 }
-                className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">Status</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Status</label>
               <select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               >
                 <option value="new">New</option>
                 <option value="in_use">In Use</option>
@@ -293,13 +296,13 @@ export default function AssetsPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-600">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Location
               </label>
               <select
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
-                className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               >
                 <option value="">— Select location —</option>
                 <option value="Bahir Dar Office">Bahir Dar Office</option>
@@ -310,7 +313,7 @@ export default function AssetsPage() {
             <button
               type="submit"
               disabled={creating}
-              className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50 sm:col-span-2"
+              className="rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-6 py-3 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed sm:col-span-2"
             >
               {creating
                 ? "Saving..."
@@ -321,12 +324,12 @@ export default function AssetsPage() {
           </form>
         )}
 
-        <div className="mb-4 flex flex-wrap gap-3">
+        <div className="mb-6 flex flex-wrap gap-3 fade-in">
           <button
             onClick={() =>
               (window.location.href = "/api/reports/assets?format=xlsx")
             }
-            className="rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
+            className="rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
           >
             Download Excel
           </button>
@@ -334,21 +337,21 @@ export default function AssetsPage() {
             onClick={() =>
               (window.location.href = "/api/reports/assets?format=docx")
             }
-            className="rounded-full bg-gray-200 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-300"
+            className="rounded-full bg-gray-100 px-5 py-2.5 text-sm font-medium text-gray-700 shadow-md transition-all duration-200 hover:bg-gray-200 hover:shadow-lg hover:scale-105"
           >
             Download Word
           </button>
         </div>
 
-        <div className="mb-4 flex gap-2">
+        <div className="mb-6 flex flex-wrap gap-2 fade-in">
           {["all", "new", "in_use", "under_repair", "retired"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`rounded px-3 py-1 text-sm ${
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 filter === f
-                  ? "bg-brand-deep text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  ? "bg-brand-deep text-white shadow-lg scale-105"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md hover:scale-105"
               }`}
             >
               {f === "all" ? "All" : (f || "").replace("_", " ")}
@@ -356,63 +359,81 @@ export default function AssetsPage() {
           ))}
         </div>
 
-        <div className="rounded-lg border-t-4 border-brand bg-white p-6 shadow">
+        <div className="rounded-2xl border-t-4 border-brand bg-white/95 backdrop-blur-sm p-6 shadow-xl fade-in">
           {loading ? (
-            <p className="text-gray-500">Loading...</p>
+            <div className="space-y-4">
+              <div className="h-8 shimmer rounded-lg" />
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="h-12 w-24 shimmer rounded-lg" />
+                    <div className="h-12 flex-1 shimmer rounded-lg" />
+                    <div className="h-12 w-16 shimmer rounded-lg" />
+                    <div className="h-12 w-16 shimmer rounded-lg" />
+                    <div className="h-12 w-16 shimmer rounded-lg" />
+                    <div className="h-12 w-32 shimmer rounded-lg" />
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : filteredAssets.length === 0 ? (
             <p className="text-gray-500">No assets found.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b text-gray-500">
-                    <th className="pb-2">Tag</th>
-                    <th className="pb-2">Item</th>
-                    <th className="pb-2">Assigned To</th>
-                    <th className="pb-2">Borrowed By</th>
-                    <th className="pb-2">Cost</th>
-                    <th className="pb-2">Location</th>
-                    <th className="pb-2">Status</th>
-                    {canEdit && <th className="pb-2"></th>}
+                  <tr className="border-b border-gray-200 text-gray-600">
+                    <th className="pb-3 font-semibold">Tag</th>
+                    <th className="pb-3 font-semibold">Item</th>
+                    <th className="pb-3 font-semibold">Assigned To</th>
+                    <th className="pb-3 font-semibold">Borrowed By</th>
+                    <th className="pb-3 font-semibold">Cost</th>
+                    <th className="pb-3 font-semibold">Location</th>
+                    <th className="pb-3 font-semibold">Status</th>
+                    {canEdit && <th className="pb-3 font-semibold"></th>}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredAssets.map((a) => (
-                    <tr key={a.id} className="border-b last:border-0">
-                      <td className="py-2 font-mono text-xs">{a.asset_tag}</td>
-                      <td className="py-2">
-                        {a.item_name}
-                        <span className="ml-1 text-xs text-gray-400">
-                          ({(a.category || "other").replace("_", " ")})
+                    <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors">
+                      <td className="py-3 font-mono text-xs font-medium text-brand-deep">{a.asset_tag}</td>
+                      <td className="py-3">
+                        <span className="font-medium text-gray-900">{a.item_name}</span>
+                        <span className="ml-2 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                          {(a.category || "other").replace("_", " ")}
                         </span>
                       </td>
-                      <td className="py-2">{a.assignee_name || "—"}</td>
-                      <td className="py-2">
+                      <td className="py-3">{a.assignee_name || "—"}</td>
+                      <td className="py-3">
                         {a.borrower_name ? (
                           <div>
-                            <span>{a.borrower_name}</span>
+                            <span className="font-medium">{a.borrower_name}</span>
                             {a.return_requested && (
-                              <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                              <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 shadow-sm">
                                 Return requested
                               </span>
                             )}
                           </div>
                         ) : (
-                          "—"
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
-                      <td className="py-2">
-                        {a.purchase_cost ? `${a.purchase_cost} ETB` : "—"}
+                      <td className="py-3">
+                        {a.purchase_cost ? (
+                          <span className="font-medium">{a.purchase_cost} ETB</span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                       </td>
-                      <td className="py-2">{a.location || "—"}</td>
-                      <td className="py-2">
+                      <td className="py-3">{a.location || "—"}</td>
+                      <td className="py-3">
                         {canEdit ? (
                           <select
                             value={a.status}
                             onChange={(e) =>
                               handleStatusChange(a.id, e.target.value)
                             }
-                            className={`rounded border-0 px-2 py-1 text-xs ${
+                            className={`rounded-full border-0 px-3 py-1.5 text-xs font-medium shadow-sm transition-all duration-200 hover:shadow-md ${
                               statusColors[a.status]
                             }`}
                           >
@@ -423,7 +444,7 @@ export default function AssetsPage() {
                           </select>
                         ) : (
                           <span
-                            className={`rounded px-2 py-1 text-xs ${
+                            className={`inline-flex rounded-full px-3 py-1.5 text-xs font-medium shadow-sm ${
                               statusColors[a.status]
                             }`}
                           >
@@ -432,24 +453,24 @@ export default function AssetsPage() {
                         )}
                       </td>
                       {canEdit && (
-                        <td className="py-2">
-                          <div className="flex flex-wrap gap-3">
+                        <td className="py-3">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => handleEditClick(a)}
-                              className="text-xs text-brand-deep hover:underline"
+                              className="rounded-full px-3 py-1.5 text-xs font-medium text-brand-deep hover:bg-brand/10 transition-all duration-200 hover:scale-105"
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleDelete(a.id)}
-                              className="text-xs text-red-600 hover:underline"
+                              className="rounded-full px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-all duration-200 hover:scale-105"
                             >
                               Delete
                             </button>
                             {a.borrowed_by && (
                               <button
                                 onClick={() => handleConfirmReturn(a.id)}
-                                className="text-xs text-green-700 hover:underline"
+                                className="rounded-full px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-all duration-200 hover:scale-105"
                               >
                                 Confirm Return
                               </button>

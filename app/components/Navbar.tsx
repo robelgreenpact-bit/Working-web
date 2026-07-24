@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 function Badge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-accent px-1 text-xs font-bold text-white">
+    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-accent px-1 text-xs font-bold text-white shadow-lg pulse">
       {count}
     </span>
   );
@@ -29,10 +29,10 @@ function NavLink({
     <a
       href={href}
       onClick={onClick}
-      className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+      className={`flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
         active
-          ? "bg-brand-deep text-white"
-          : "text-brand-deep hover:bg-brand/20"
+          ? "bg-brand-deep text-white shadow-lg scale-105"
+          : "text-brand-deep hover:bg-brand/20 hover:scale-105"
       }`}
     >
       {children}
@@ -110,10 +110,10 @@ export default function Navbar({ title }: { title: string }) {
         <div className="relative">
           <button
             onClick={() => setAssetsDropdownOpen(!assetsDropdownOpen)}
-            className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
               isActive("/assets") || isActive("/assets/inventory")
-                ? "bg-brand-deep text-white"
-                : "text-brand-deep hover:bg-brand/20"
+                ? "bg-brand-deep text-white shadow-lg scale-105"
+                : "text-brand-deep hover:bg-brand/20 hover:scale-105"
             }`}
           >
             Assets
@@ -124,23 +124,23 @@ export default function Navbar({ title }: { title: string }) {
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              className={`transition-transform ${assetsDropdownOpen ? "rotate-180" : ""}`}
+              className={`transition-transform duration-200 ${assetsDropdownOpen ? "rotate-180" : ""}`}
             >
               <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
           {assetsDropdownOpen && (
-            <div className="absolute left-0 top-full z-50 mt-1 rounded-lg border border-gray-200 bg-white p-2 shadow-lg">
+            <div className="absolute left-0 top-full z-50 mt-2 rounded-xl border border-gray-200 bg-white/95 backdrop-blur-sm p-2 shadow-xl fade-in min-w-[160px]">
               <a
                 href="/assets"
                 onClick={() => {
                   setAssetsDropdownOpen(false);
                   closeMenu();
                 }}
-                className={`block rounded px-3 py-2 text-sm ${
+                className={`block rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
                   isActive("/assets")
-                    ? "bg-brand-deep text-white"
-                    : "text-brand-deep hover:bg-brand/20"
+                    ? "bg-brand-deep text-white shadow-md"
+                    : "text-brand-deep hover:bg-brand/10 hover:shadow-md"
                 }`}
               >
                 Asset Registry
@@ -151,10 +151,10 @@ export default function Navbar({ title }: { title: string }) {
                   setAssetsDropdownOpen(false);
                   closeMenu();
                 }}
-                className={`block rounded px-3 py-2 text-sm ${
+                className={`block rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
                   isActive("/assets/inventory")
-                    ? "bg-brand-deep text-white"
-                    : "text-brand-deep hover:bg-brand/20"
+                    ? "bg-brand-deep text-white shadow-md"
+                    : "text-brand-deep hover:bg-brand/10 hover:shadow-md"
                 }`}
               >
                 Inventory
@@ -267,16 +267,19 @@ export default function Navbar({ title }: { title: string }) {
   );
 
   return (
-    <div className="relative border-b border-brand-deep/10 bg-white px-4 py-3 shadow-sm sm:px-6">
+    <div className="relative border-b border-brand-deep/10 bg-white/80 backdrop-blur-sm px-4 py-3 shadow-lg sm:px-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Image
-            src="/logo.png"
-            alt="Greenpact"
-            width={44}
-            height={44}
-            className="h-11 w-11 object-contain"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <Image
+              src="/logo.png"
+              alt="Greenpact"
+              width={44}
+              height={44}
+              className="h-11 w-11 object-contain transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3"
+            />
+            <div className="absolute inset-0 rounded-full bg-brand/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" />
+          </div>
           <div className="hidden flex-wrap items-center gap-2 md:flex">
             {links}
           </div>
@@ -284,20 +287,23 @@ export default function Navbar({ title }: { title: string }) {
 
         <div className="flex items-center gap-3">
           {name ? (
-            <span className="hidden text-sm font-medium text-gray-600 sm:inline">
-              {name}
-            </span>
+            <div className="hidden items-center gap-2 rounded-full bg-brand/10 px-4 py-2 sm:flex">
+              <div className="h-8 w-8 rounded-full bg-brand-deep flex items-center justify-center text-white font-semibold text-sm">
+                {name.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium text-gray-700">{name}</span>
+            </div>
           ) : null}
           <button
             onClick={handleLogout}
-            className="hidden rounded-full bg-brand-deep px-4 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark md:block"
+            className="hidden rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-5 py-2 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 md:block"
           >
             Log Out
           </button>
 
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-brand-deep hover:bg-brand/20 md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-brand-deep hover:bg-brand/20 hover:scale-110 transition-all duration-200 md:hidden"
             aria-label="Toggle menu"
           >
             {menuOpen ? (
@@ -308,6 +314,7 @@ export default function Navbar({ title }: { title: string }) {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
+                className="transition-transform duration-200 rotate-90"
               >
                 <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
               </svg>
@@ -328,16 +335,19 @@ export default function Navbar({ title }: { title: string }) {
       </div>
 
       {menuOpen ? (
-        <div className="absolute left-0 right-0 top-full z-50 flex flex-col gap-1 border-b border-brand-deep/10 bg-white p-4 shadow-md md:hidden">
+        <div className="absolute left-0 right-0 top-full z-50 flex flex-col gap-2 border-b border-brand-deep/10 bg-white/95 backdrop-blur-sm p-4 shadow-xl md:hidden fade-in">
           {name ? (
-            <p className="mb-2 border-b border-gray-100 pb-2 text-sm font-medium text-gray-600">
-              {name}
-            </p>
+            <div className="flex items-center gap-3 rounded-full bg-brand/10 px-4 py-3">
+              <div className="h-10 w-10 rounded-full bg-brand-deep flex items-center justify-center text-white font-semibold">
+                {name.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium text-gray-700">{name}</span>
+            </div>
           ) : null}
           {links}
           <button
             onClick={handleLogout}
-            className="mt-2 rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
+            className="mt-2 rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-4 py-3 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl"
           >
             Log Out
           </button>
