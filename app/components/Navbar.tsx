@@ -48,6 +48,7 @@ export default function Navbar({ title }: { title: string }) {
   const [name, setName] = useState<string | null>(null);
   const [badges, setBadges] = useState<Record<string, number>>({});
   const [menuOpen, setMenuOpen] = useState(false);
+  const [assetsDropdownOpen, setAssetsDropdownOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/dashboard-role")
@@ -106,22 +107,61 @@ export default function Navbar({ title }: { title: string }) {
       </NavLink>
 
       {canSeeAssets ? (
-        <>
-          <NavLink
-            href="/assets"
-            active={isActive("/assets")}
-            onClick={closeMenu}
+        <div className="relative">
+          <button
+            onClick={() => setAssetsDropdownOpen(!assetsDropdownOpen)}
+            className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              isActive("/assets") || isActive("/assets/inventory")
+                ? "bg-brand-deep text-white"
+                : "text-brand-deep hover:bg-brand/20"
+            }`}
           >
             Assets
-          </NavLink>
-          <NavLink
-            href="/assets/inventory"
-            active={isActive("/assets/inventory")}
-            onClick={closeMenu}
-          >
-            Inventory
-          </NavLink>
-        </>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`transition-transform ${assetsDropdownOpen ? "rotate-180" : ""}`}
+            >
+              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {assetsDropdownOpen && (
+            <div className="absolute left-0 top-full z-50 mt-1 rounded-lg border border-gray-200 bg-white p-2 shadow-lg">
+              <a
+                href="/assets"
+                onClick={() => {
+                  setAssetsDropdownOpen(false);
+                  closeMenu();
+                }}
+                className={`block rounded px-3 py-2 text-sm ${
+                  isActive("/assets")
+                    ? "bg-brand-deep text-white"
+                    : "text-brand-deep hover:bg-brand/20"
+                }`}
+              >
+                Asset Registry
+              </a>
+              <a
+                href="/assets/inventory"
+                onClick={() => {
+                  setAssetsDropdownOpen(false);
+                  closeMenu();
+                }}
+                className={`block rounded px-3 py-2 text-sm ${
+                  isActive("/assets/inventory")
+                    ? "bg-brand-deep text-white"
+                    : "text-brand-deep hover:bg-brand/20"
+                }`}
+              >
+                Inventory
+              </a>
+            </div>
+          )}
+        </div>
       ) : null}
 
       {canSeeReports ? (

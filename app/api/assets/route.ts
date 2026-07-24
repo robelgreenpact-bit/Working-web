@@ -17,20 +17,29 @@ async function generateAssetTag(
 ) {
   const prefix = categoryPrefixes[category] || "GPOT";
 
-  const { data } = await supabase
-    .from("asset_tag_sequence")
-    .select("last_number")
+  // Query the highest existing asset tag for this category
+  const { data: existingAssets } = await supabase
+    .from("assets")
+    .select("asset_tag")
     .eq("category", category)
-    .single();
+    .like("asset_tag", `${prefix}%`)
+    .order("asset_tag", { ascending: false })
+    .limit(1);
 
-  const next = (data?.last_number || 0) + 1;
+  let nextNumber = 1;
 
+  if (existingAssets && existingAssets.length > 0) {
+    const lastTag = existingAssets[0].asset_tag;
+    const lastNumber = parseInt(lastTag.replace(prefix, ""), 10);
+    nextNumber = lastNumber + 1;
+  }
+
+  // Update the sequence table for tracking
   await supabase
     .from("asset_tag_sequence")
-    .update({ last_number: next })
-    .eq("category", category);
+    .upsert({ category, last_number: nextNumber }, { onConflict: "category" });
 
-  return `${prefix}${String(next).padStart(4, "0")}`;
+  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
 }
 function getServiceClient() {
   return createServiceClient(
@@ -128,42 +137,37 @@ export async function POST(request: Request) {
     );
   }
 
-  const assetTag = await generateAssetTag(supabase, category);
+  let assetTag = await generateAssetTag(supabase, category);
+  let attempts = 0;
+  const maxAttempts = 5;
 
-  // Check if asset_tag already exists (race condition handling)
-  const { data: existingAsset } = await supabase
-    .from("assets")
-    .select("asset_tag")
-    .eq("asset_tag", assetTag)
-    .single();
+  while (attempts < maxAttempts) {
+    const { error } = await supabase.from("assets").insert({
+      asset_tag: assetTag,
+      category,
+      item_name: item_name || null,
+      assigned_to: assigned_to || null,
+      purchase_cost: purchase_cost || null,
+      purchase_date: purchase_date || null,
+      status: status || "in_use",
+      location: location || null,
+    });
 
-  if (existingAsset) {
-    return NextResponse.json(
-      { error: "Asset tag already exists. Please try again." },
-      { status: 409 },
-    );
-  }
-
-  const { error } = await supabase.from("assets").insert({
-    asset_tag: assetTag,
-    category,
-    item_name: item_name || null,
-    assigned_to: assigned_to || null,
-    purchase_cost: purchase_cost || null,
-    purchase_date: purchase_date || null,
-    status: status || "in_use",
-    location: location || null,
-  });
-
-  if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json(
-        { error: "Asset tag already exists. Please try again." },
-        { status: 409 },
-      );
+    if (error) {
+      if (error.code === "23505") {
+        // Duplicate key error - generate a new tag and retry
+        attempts++;
+        assetTag = await generateAssetTag(supabase, category);
+        continue;
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ success: true });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json(
+    { error: "Failed to generate unique asset tag after multiple attempts" },
+    { status: 500 },
+  );
 }
