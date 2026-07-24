@@ -383,7 +383,7 @@ export default function AssetsPage() {
                       <td className="py-2">
                         {a.item_name}
                         <span className="ml-1 text-xs text-gray-400">
-                          ({a.category.replace("_", " ")})
+                          ({(a.category || "other").replace("_", " ")})
                         </span>
                       </td>
                       <td className="py-2">{a.assignee_name || "—"}</td>

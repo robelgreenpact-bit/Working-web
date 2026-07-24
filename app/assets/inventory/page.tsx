@@ -80,7 +80,7 @@ export default function InventoryPage() {
                             categoryColors[item.category] || categoryColors.other
                           }`}
                         >
-                          {item.category.replace("_", " ")}
+                          {(item.category || "other").replace("_", " ")}
                         </span>
                       </td>
                       <td className="py-3 font-medium">{item.item_name || "—"}</td>
