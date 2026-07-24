@@ -106,13 +106,22 @@ export default function Navbar({ title }: { title: string }) {
       </NavLink>
 
       {canSeeAssets ? (
-        <NavLink
-          href="/assets"
-          active={isActive("/assets")}
-          onClick={closeMenu}
-        >
-          Assets
-        </NavLink>
+        <>
+          <NavLink
+            href="/assets"
+            active={isActive("/assets")}
+            onClick={closeMenu}
+          >
+            Assets
+          </NavLink>
+          <NavLink
+            href="/assets/inventory"
+            active={isActive("/assets/inventory")}
+            onClick={closeMenu}
+          >
+            Inventory
+          </NavLink>
+        </>
       ) : null}
 
       {canSeeReports ? (
