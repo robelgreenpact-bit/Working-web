@@ -64,6 +64,9 @@ export default function FinancePage() {
   const [inventoryChoice, setInventoryChoice] = useState<
     Record<string, string>
   >({});
+  const [taxRegistryChoice, setTaxRegistryChoice] = useState<
+    Record<string, boolean>
+  >({});
 
   const loadData = async () => {
     setLoading(true);
@@ -104,6 +107,7 @@ export default function FinancePage() {
         comment: commentDrafts[id] || "",
         issueFromInventory: !!chosenAssetId,
         assetId: chosenAssetId || null,
+        forTaxRegistry: taxRegistryChoice[id] || false,
       }),
     });
 
@@ -217,7 +221,7 @@ export default function FinancePage() {
                           [r.id]: e.target.value,
                         })
                       }
-                      className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
                     >
                       <option value="">— Buy new instead —</option>
                       {availableAssets.map((a) => (
@@ -228,6 +232,27 @@ export default function FinancePage() {
                     </select>
                   </div>
                 )}
+
+                <div className="mb-3 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id={`tax-registry-${r.id}`}
+                    checked={taxRegistryChoice[r.id] || false}
+                    onChange={(e) =>
+                      setTaxRegistryChoice({
+                        ...taxRegistryChoice,
+                        [r.id]: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-brand-deep focus:ring-brand-deep"
+                  />
+                  <label
+                    htmlFor={`tax-registry-${r.id}`}
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Send to Tax Registry
+                  </label>
+                </div>
 
                 <textarea
                   placeholder="Optional comment..."

@@ -26,6 +26,7 @@ export async function GET() {
     .from("requests")
     .select("*")
     .eq("status", "approved")
+    .eq("for_tax_registry", true)
     .order("updated_at", { ascending: false });
 
   const { data: payments } = await supabase

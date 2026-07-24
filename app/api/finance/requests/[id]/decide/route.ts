@@ -21,7 +21,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { decision, comment, issueFromInventory, assetId } =
+  const { decision, comment, issueFromInventory, assetId, forTaxRegistry } =
     await request.json();
 
   if (!decision || !["approved", "rejected"].includes(decision)) {
@@ -40,9 +40,17 @@ export async function POST(
 
   const newStatus = decision === "approved" ? "approved" : "rejected";
 
+  const updateData: { status: string; for_tax_registry?: boolean } = {
+    status: newStatus,
+  };
+
+  if (decision === "approved" && forTaxRegistry) {
+    updateData.for_tax_registry = true;
+  }
+
   const { error: updateError } = await supabase
     .from("requests")
-    .update({ status: newStatus })
+    .update(updateData)
     .eq("id", id);
 
   if (updateError) {
