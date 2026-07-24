@@ -45,5 +45,34 @@ export async function POST(
     return NextResponse.json({ error: approvalError.message }, { status: 500 });
   }
 
+  // Get request details for notification
+  const { data: requestData } = await supabase
+    .from("requests")
+    .select("requester_id, title")
+    .eq("id", id)
+    .single();
+
+  if (requestData && decision === "approved") {
+    // Create notification for the requester
+    await supabase.from("notifications").insert({
+      user_id: requestData.requester_id,
+      type: "request_approved",
+      title: "Request Approved",
+      message: `Your request "${requestData.title}" has been approved by manager and is pending finance approval.`,
+      link: "/worker",
+      metadata: { request_id: id },
+    });
+  } else if (requestData && decision === "rejected") {
+    // Create notification for the requester
+    await supabase.from("notifications").insert({
+      user_id: requestData.requester_id,
+      type: "request_rejected",
+      title: "Request Rejected",
+      message: `Your request "${requestData.title}" has been rejected by manager.`,
+      link: "/worker",
+      metadata: { request_id: id },
+    });
+  }
+
   return NextResponse.json({ success: true });
 }

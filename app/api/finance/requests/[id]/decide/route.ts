@@ -109,5 +109,27 @@ export async function POST(
       }
     }
   }
+
+  // Create notification for the requester when finally approved
+  if (decision === "approved") {
+    await supabase.from("notifications").insert({
+      user_id: reqData.requester_id,
+      type: "request_finally_approved",
+      title: "Request Approved",
+      message: `Your request "${reqData.title}" has been fully approved and processed.`,
+      link: "/worker",
+      metadata: { request_id: id },
+    });
+  } else if (decision === "rejected") {
+    await supabase.from("notifications").insert({
+      user_id: reqData.requester_id,
+      type: "request_rejected",
+      title: "Request Rejected",
+      message: `Your request "${reqData.title}" has been rejected by finance.`,
+      link: "/worker",
+      metadata: { request_id: id },
+    });
+  }
+
   return NextResponse.json({ success: true });
 }
