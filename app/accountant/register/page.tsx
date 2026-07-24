@@ -151,7 +151,7 @@ export default function AccountantRegisterPage() {
                     <div>
                       <h3 className="font-semibold">{item.title}</h3>
                       <p className="text-sm text-gray-500">
-                        Worker Request — {item.type.replace("_", " ")} — From{" "}
+                        Worker Request — {(item.type || "").replace("_", " ")} — From{" "}
                         {item.requester?.name || "Unknown"}
                       </p>
                     </div>

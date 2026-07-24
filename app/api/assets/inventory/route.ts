@@ -52,11 +52,11 @@ export async function GET() {
   }>();
 
   for (const asset of assets || []) {
-    const key = `${asset.category}-${asset.item_name || "unnamed"}`;
-    
+    const key = `${asset.category || "other"}-${asset.item_name || "unnamed"}`;
+
     if (!inventoryMap.has(key)) {
       inventoryMap.set(key, {
-        category: asset.category,
+        category: asset.category || "other",
         item_name: asset.item_name,
         total_count: 0,
         available_count: 0,

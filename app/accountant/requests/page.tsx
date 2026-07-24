@@ -77,7 +77,7 @@ export default function WorkerPage() {
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="py-2">{r.title}</td>
                     <td className="py-2 capitalize">
-                      {r.type.replace("_", " ")}
+                      {(r.type || "").replace("_", " ")}
                     </td>
                     <td className="py-2">{r.estimated_cost}</td>
                     <td className="py-2">

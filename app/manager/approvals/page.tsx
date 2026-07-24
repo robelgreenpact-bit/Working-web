@@ -127,7 +127,7 @@ export default function ManagerApprovalsPage() {
                     <h2 className="text-lg font-semibold">{r.title}</h2>
                     <p className="text-sm text-gray-500">
                       From {r.requester?.name || "Unknown"} (
-                      {r.requester?.email}) — {r.type.replace("_", " ")}
+                      {r.requester?.email}) — {(r.type || "").replace("_", " ")}
                     </p>
                   </div>
                   <span className="text-xs text-gray-400">
@@ -236,7 +236,7 @@ export default function ManagerApprovalsPage() {
                     <p className="font-medium">{r.title}</p>
                     <p className="text-sm text-gray-500">
                       From {r.requester?.name || "Unknown"} —{" "}
-                      {r.type.replace("_", " ")}
+                      {(r.type || "").replace("_", " ")}
                     </p>
                   </div>
                   <span
@@ -248,7 +248,7 @@ export default function ManagerApprovalsPage() {
                           : "bg-blue-100 text-blue-800"
                     }`}
                   >
-                    {r.status.replace("_", " ")}
+                    {(r.status || "").replace("_", " ")}
                   </span>
                 </div>
 

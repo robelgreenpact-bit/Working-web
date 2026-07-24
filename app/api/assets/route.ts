@@ -130,6 +130,20 @@ export async function POST(request: Request) {
 
   const assetTag = await generateAssetTag(supabase, category);
 
+  // Check if asset_tag already exists (race condition handling)
+  const { data: existingAsset } = await supabase
+    .from("assets")
+    .select("asset_tag")
+    .eq("asset_tag", assetTag)
+    .single();
+
+  if (existingAsset) {
+    return NextResponse.json(
+      { error: "Asset tag already exists. Please try again." },
+      { status: 409 },
+    );
+  }
+
   const { error } = await supabase.from("assets").insert({
     asset_tag: assetTag,
     category,
@@ -142,6 +156,12 @@ export async function POST(request: Request) {
   });
 
   if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "Asset tag already exists. Please try again." },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

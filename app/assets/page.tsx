@@ -351,7 +351,7 @@ export default function AssetsPage() {
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
-              {f === "all" ? "All" : f.replace("_", " ")}
+              {f === "all" ? "All" : (f || "").replace("_", " ")}
             </button>
           ))}
         </div>
@@ -427,7 +427,7 @@ export default function AssetsPage() {
                               statusColors[a.status]
                             }`}
                           >
-                            {a.status.replace("_", " ")}
+                            {(a.status || "").replace("_", " ")}
                           </span>
                         )}
                       </td>
