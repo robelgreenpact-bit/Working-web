@@ -274,9 +274,9 @@ export default function Navbar({ title }: { title: string }) {
             <Image
               src="/logo.png"
               alt="Greenpact"
-              width={44}
-              height={44}
-              className="h-11 w-11 object-contain transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3"
+              width={56}
+              height={56}
+              className="h-14 w-14 object-contain transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3"
             />
             <div className="absolute inset-0 rounded-full bg-brand/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" />
           </div>
