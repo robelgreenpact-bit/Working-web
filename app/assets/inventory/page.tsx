@@ -73,81 +73,112 @@ export default function InventoryPage() {
           ) : inventory.length === 0 ? (
             <p className="text-gray-500">No inventory data found.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 text-gray-600">
-                    <th className="pb-3 font-semibold">Category</th>
-                    <th className="pb-3 font-semibold">Item Name</th>
-                    <th className="pb-3 text-center font-semibold">Total</th>
-                    <th className="pb-3 text-center font-semibold">Available</th>
-                    <th className="pb-3 text-center font-semibold">Borrowed</th>
-                    <th className="pb-3 font-semibold">Borrowed By</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inventory.map((item, index) => (
-                    <tr
-                      key={`${item.category}-${item.item_name}-${index}`}
-                      className="border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors"
-                    >
-                      <td className="py-3">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-medium shadow-sm ${
-                            categoryColors[item.category] || categoryColors.other
-                          }`}
-                        >
-                          {(item.category || "other").replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="py-3 font-medium text-gray-900">{item.item_name || "—"}</td>
-                      <td className="py-3 text-center">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand-deep to-brand-dark text-white font-bold shadow-md">
-                          {item.total_count}
-                        </span>
-                      </td>
-                      <td className="py-3 text-center">
-                        <span
-                          className={`inline-flex h-10 w-10 items-center justify-center rounded-full font-bold shadow-sm transition-all duration-200 hover:scale-110 ${
-                            item.available_count > 0
-                              ? "bg-gradient-to-br from-green-400 to-green-600 text-white"
-                              : "bg-gradient-to-br from-red-400 to-red-600 text-white"
-                          }`}
-                        >
-                          {item.available_count}
-                        </span>
-                      </td>
-                      <td className="py-3 text-center">
-                        <span
-                          className={`inline-flex h-10 w-10 items-center justify-center rounded-full font-bold shadow-sm transition-all duration-200 hover:scale-110 ${
-                            item.borrowed_count > 0
-                              ? "bg-gradient-to-br from-amber-400 to-amber-600 text-white"
-                              : "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-700"
-                          }`}
-                        >
-                          {item.borrowed_count}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        {item.borrowed_by.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {item.borrowed_by.map((borrower, idx) => (
-                              <span
-                                key={idx}
-                                className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-200 transition-colors"
-                              >
-                                {borrower}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-8">
+              {(() => {
+                // Group inventory by category
+                const grouped = inventory.reduce((acc, item) => {
+                  const cat = item.category || "other";
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(item);
+                  return acc;
+                }, {} as Record<string, typeof inventory>);
+
+                const categoryLabels: Record<string, string> = {
+                  electronics: "Electronics",
+                  furniture: "Furniture",
+                  vehicle: "Vehicles",
+                  office_supplies: "Office Supplies",
+                  other: "Other",
+                };
+
+                const categoryIcons: Record<string, string> = {
+                  electronics: "💻",
+                  furniture: "🪑",
+                  vehicle: "🚗",
+                  office_supplies: "📦",
+                  other: "📦",
+                };
+
+                return Object.entries(grouped).map(([category, items]) => (
+                  <div key={category} className="fade-in">
+                    <div className="mb-4 flex items-center gap-3 border-b-2 border-brand/20 pb-3">
+                      <span className="text-3xl">{categoryIcons[category] || "📦"}</span>
+                      <div>
+                        <h3 className="text-xl font-bold text-brand-deep">
+                          {categoryLabels[category] || category}
+                        </h3>
+                        <p className="text-sm text-gray-500">{items.length} item type{items.length !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-600">
+                            <th className="px-4 py-3 font-semibold">Item Name</th>
+                            <th className="px-4 py-3 text-center font-semibold">Total</th>
+                            <th className="px-4 py-3 text-center font-semibold">Available</th>
+                            <th className="px-4 py-3 text-center font-semibold">Borrowed</th>
+                            <th className="px-4 py-3 font-semibold">Borrowed By</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item, index) => (
+                            <tr
+                              key={`${item.category}-${item.item_name}-${index}`}
+                              className="border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors"
+                            >
+                              <td className="px-4 py-3 font-medium text-gray-900">{item.item_name || "—"}</td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand-deep to-brand-dark text-white font-bold shadow-md">
+                                  {item.total_count}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span
+                                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full font-bold shadow-sm transition-all duration-200 hover:scale-110 ${
+                                    item.available_count > 0
+                                      ? "bg-gradient-to-br from-green-400 to-green-600 text-white"
+                                      : "bg-gradient-to-br from-red-400 to-red-600 text-white"
+                                  }`}
+                                >
+                                  {item.available_count}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span
+                                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full font-bold shadow-sm transition-all duration-200 hover:scale-110 ${
+                                    item.borrowed_count > 0
+                                      ? "bg-gradient-to-br from-amber-400 to-amber-600 text-white"
+                                      : "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-700"
+                                  }`}
+                                >
+                                  {item.borrowed_count}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {item.borrowed_by.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {item.borrowed_by.map((borrower, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-200 transition-colors"
+                                      >
+                                        {borrower}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           )}
         </div>
