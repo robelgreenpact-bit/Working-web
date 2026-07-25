@@ -198,6 +198,7 @@ export default function FinancePaymentsPage() {
         unit_price: it.unit_price,
       }))
     );
+    setFiles(null);
     setShowForm(true);
   };
 

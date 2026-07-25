@@ -31,13 +31,6 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (pr.status !== "pending_manager") {
-    return NextResponse.json(
-      { error: "Can only delete pending requests" },
-      { status: 400 },
-    );
-  }
-
   // Delete items first
   await supabase
     .from("payment_request_items")

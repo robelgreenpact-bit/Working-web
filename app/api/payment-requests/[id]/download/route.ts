@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import fs from "fs";
-import path from "path";
+// @ts-ignore
 import { jsPDF } from "jspdf";
 
 function getServiceClient() {
@@ -57,15 +56,6 @@ export async function GET(
   const vat = subtotal * 0.15;
   const total = subtotal + vat;
 
-  let logoBuffer: Buffer | null = null;
-  try {
-    logoBuffer = fs.readFileSync(
-      path.join(process.cwd(), "public", "logo.png"),
-    );
-  } catch {
-    logoBuffer = null;
-  }
-
   const dateStr = pr.required_date
     ? new Date(pr.required_date).toLocaleDateString("en-US", {
         year: "numeric",
@@ -102,10 +92,6 @@ export async function GET(
   y += 12;
 
   // Logo and company name
-  if (logoBuffer) {
-    const logoBase64 = logoBuffer.toString("base64");
-    doc.addImage(`data:image/png;base64,${logoBase64}`, "PNG", margin, y, 20, 20);
-  }
   text("Greenpact Research Solutions", pageWidth / 2, y + 10, {
     bold: true,
     size: 16,
@@ -249,17 +235,13 @@ export async function GET(
   y += 20;
 
   // Footer
-  if (logoBuffer) {
-    const logoBase64 = logoBuffer.toString("base64");
-    doc.addImage(`data:image/png;base64,${logoBase64}`, "PNG", margin, y, 15, 15);
-  }
   doc.setFontSize(8);
   doc.setTextColor(102, 102, 102);
-  doc.text("Address 1: Kebele 01, Bahir Dar, Ethiopia", margin + 20, y + 5);
-  doc.text("Address 2: Yeka subcity, woreda 09, Addis Ababa, Ethiopia", margin + 20, y + 10);
-  doc.text("Phone: +251939965895", margin + 20, y + 15);
-  doc.text("Email: info@greenpactconsulting.com", margin + 20, y + 20);
-  doc.text("Website: www.greenpactconsulting.com", margin + 20, y + 25);
+  doc.text("Address 1: Kebele 01, Bahir Dar, Ethiopia", margin, y + 5);
+  doc.text("Address 2: Yeka subcity, woreda 09, Addis Ababa, Ethiopia", margin, y + 10);
+  doc.text("Phone: +251939965895", margin, y + 15);
+  doc.text("Email: info@greenpactconsulting.com", margin, y + 20);
+  doc.text("Website: www.greenpactconsulting.com", margin, y + 25);
 
   const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
 
