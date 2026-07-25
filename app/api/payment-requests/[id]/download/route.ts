@@ -295,9 +295,9 @@ export async function GET(
 
   // Signatures
   page.drawText("Requested By: ", { x: 50, y, size: 12, font: fontBold });
-  page.drawText(requester?.name || "", { x: 130, y, size: 12, font: font });
+  page.drawText(requester?.name || "", { x: 145, y, size: 12, font: font });
   page.drawText("Approved by: ", { x: 300, y, size: 12, font: fontBold });
-  page.drawText("Solomon Bizuayehu", { x: 380, y, size: 12, font: font });
+  page.drawText("Solomon Bizuayehu", { x: 395, y, size: 12, font: font });
   y -= 20;
 
   page.drawText("Signature:", { x: 50, y, size: 12, font: fontBold });
