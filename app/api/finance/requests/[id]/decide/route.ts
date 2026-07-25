@@ -21,7 +21,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { decision, comment, issueFromInventory, assetId, forTaxRegistry } =
+  const { decision, comment, issueFromInventory, assetIds, forTaxRegistry } =
     await request.json();
 
   if (!decision || !["approved", "rejected"].includes(decision)) {
@@ -72,22 +72,28 @@ export async function POST(
   // If approved AND it's a durable/physical item, either issue from inventory or create a new asset
   const durableTypes = ["physical_good", "other_asset", "electronics"];
   if (decision === "approved" && durableTypes.includes(reqData.type)) {
-    if (issueFromInventory && assetId) {
-      const { error: issueError } = await supabase
-        .from("assets")
-        .update({
-          borrowed_by: reqData.requester_id,
-          borrowed_at: new Date().toISOString(),
-        })
-        .eq("id", assetId)
-        .is("borrowed_by", null);
+    if (issueFromInventory && assetIds && assetIds.length > 0) {
+      // Issue multiple assets from inventory
+      const issuePromises = assetIds.map(async (assetId: string) => {
+        const { error: issueError } = await supabase
+          .from("assets")
+          .update({
+            borrowed_by: reqData.requester_id,
+            borrowed_at: new Date().toISOString(),
+          })
+          .eq("id", assetId)
+          .is("borrowed_by", null);
+        return issueError;
+      });
 
-      if (issueError) {
+      const errors = await Promise.all(issuePromises);
+      const failedCount = errors.filter(e => e).length;
+
+      if (failedCount > 0) {
         return NextResponse.json({
           success: true,
           warning:
-            "Request approved but issuing from inventory failed: " +
-            issueError.message,
+            `Request approved but issuing ${failedCount} of ${assetIds.length} items from inventory failed.`,
         });
       }
     } else {

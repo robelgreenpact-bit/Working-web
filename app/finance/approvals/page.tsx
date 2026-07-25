@@ -63,7 +63,7 @@ export default function FinancePage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [availableAssets, setAvailableAssets] = useState<AvailableAsset[]>([]);
   const [inventoryChoice, setInventoryChoice] = useState<
-    Record<string, string>
+    Record<string, string[]>
   >({});
   const [taxRegistryChoice, setTaxRegistryChoice] = useState<
     Record<string, boolean>
@@ -99,15 +99,15 @@ export default function FinancePage() {
     decision: "approved" | "rejected"
   ) => {
     setProcessing(id);
-    const chosenAssetId = inventoryChoice[id];
+    const chosenAssetIds = inventoryChoice[id] || [];
     const res = await fetch(`/api/finance/requests/${id}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         decision,
         comment: commentDrafts[id] || "",
-        issueFromInventory: !!chosenAssetId,
-        assetId: chosenAssetId || null,
+        issueFromInventory: chosenAssetIds.length > 0,
+        assetIds: chosenAssetIds.length > 0 ? chosenAssetIds : null,
         forTaxRegistry: taxRegistryChoice[id] || false,
       }),
     });
@@ -213,24 +213,42 @@ export default function FinancePage() {
                   <div className="mb-3">
                     <label className="mb-1 block text-xs font-medium text-gray-500">
                       Fulfill from Inventory (optional)
+                      {(r.quantity || 0) > 1 && <span className="ml-2 text-amber-600">Quantity: {r.quantity}</span>}
                     </label>
-                    <select
-                      value={inventoryChoice[r.id] || ""}
-                      onChange={(e) =>
-                        setInventoryChoice({
-                          ...inventoryChoice,
-                          [r.id]: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-                    >
-                      <option value="">— Buy new instead —</option>
-                      {availableAssets.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.asset_tag} — {a.item_name} ({a.category}){a.serial_number ? ` — SN: ${a.serial_number}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {availableAssets
+                        .filter(a => a.category === (r.type === "electronics" ? "electronics" : a.category) || r.type !== "electronics")
+                        .map((a) => (
+                          <label key={a.id} className="flex items-center gap-2 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(inventoryChoice[r.id] || []).includes(a.id)}
+                              onChange={(e) => {
+                                const current = inventoryChoice[r.id] || [];
+                                if (e.target.checked) {
+                                  if (current.length < (r.quantity || 1)) {
+                                    setInventoryChoice({
+                                      ...inventoryChoice,
+                                      [r.id]: [...current, a.id],
+                                    });
+                                  } else {
+                                    alert(`Can only select ${r.quantity || 1} items`);
+                                  }
+                                } else {
+                                  setInventoryChoice({
+                                    ...inventoryChoice,
+                                    [r.id]: current.filter((id: string) => id !== a.id),
+                                  });
+                                }
+                              }}
+                              className="h-4 w-4 rounded border-gray-300 text-brand-deep focus:ring-brand-deep"
+                            />
+                            <span className="text-sm">
+                              {a.asset_tag} — {a.item_name} ({a.category}){a.serial_number ? ` — SN: ${a.serial_number}` : ""}
+                            </span>
+                          </label>
+                        ))}
+                    </div>
                   </div>
                 )}
 
