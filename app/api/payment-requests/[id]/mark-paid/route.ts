@@ -26,9 +26,9 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (existing.status !== "approved") {
+  if (existing.status !== "pending_finance") {
     return NextResponse.json(
-      { error: "Only approved requests can be marked as paid" },
+      { error: "Only manager-approved requests can be marked as paid" },
       { status: 400 },
     );
   }
