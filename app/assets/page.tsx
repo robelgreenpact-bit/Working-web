@@ -42,6 +42,7 @@ export default function AssetsPage() {
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
   const [form, setForm] = useState({
     category: "",
@@ -448,17 +449,29 @@ export default function AssetsPage() {
 
                 return Object.entries(grouped).map(([category, assets]) => (
                   <div key={category} className="fade-in">
-                    <div className="mb-4 flex items-center gap-3 border-b-2 border-brand/20 pb-3">
-                      <span className="text-3xl">{categoryIcons[category] || "📦"}</span>
-                      <div>
-                        <h3 className="text-xl font-bold text-brand-deep">
-                          {categoryLabels[category] || category}
-                        </h3>
-                        <p className="text-sm text-gray-500">{assets.length} item{assets.length !== 1 ? 's' : ''}</p>
+                    <div 
+                      className="mb-4 flex items-center justify-between gap-3 border-b-2 border-brand/20 pb-3 cursor-pointer hover:bg-gray-50 transition-colors rounded-lg px-2 -mx-2"
+                      onClick={() => setCollapsedCategories({
+                        ...collapsedCategories,
+                        [category]: !collapsedCategories[category]
+                      })}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">{categoryIcons[category] || "📦"}</span>
+                        <div>
+                          <h3 className="text-xl font-bold text-brand-deep">
+                            {categoryLabels[category] || category}
+                          </h3>
+                          <p className="text-sm text-gray-500">{assets.length} item{assets.length !== 1 ? 's' : ''}</p>
+                        </div>
                       </div>
+                      <button className="text-2xl text-gray-400 hover:text-brand-deep transition-colors">
+                        {collapsedCategories[category] ? '▶' : '▼'}
+                      </button>
                     </div>
-                    <div className="overflow-x-auto rounded-xl border border-gray-200">
-                      <table className="w-full text-left text-sm">
+                    {!collapsedCategories[category] && (
+                      <div className="overflow-x-auto rounded-xl border border-gray-200">
+                        <table className="w-full text-left text-sm">
                         <thead>
                           <tr className="bg-gray-50 text-gray-600">
                             <th className="px-4 py-3 font-semibold">Tag</th>
@@ -567,6 +580,7 @@ export default function AssetsPage() {
                         </tbody>
                       </table>
                     </div>
+                    )}
                   </div>
                 ));
               })()}
