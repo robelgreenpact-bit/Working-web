@@ -9,6 +9,7 @@ type Asset = {
   category: string;
   item_name: string | null;
   serial_number: string | null;
+  electronics_subcategory: string | null;
   assigned_to: string | null;
   assignee_name: string | null;
   borrowed_by: string | null;
@@ -419,113 +420,156 @@ export default function AssetsPage() {
           ) : filteredAssets.length === 0 ? (
             <p className="text-gray-500">No assets found.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 text-gray-600">
-                    <th className="pb-3 font-semibold">Tag</th>
-                    <th className="pb-3 font-semibold">Item</th>
-                    <th className="pb-3 font-semibold">Serial No</th>
-                    <th className="pb-3 font-semibold">Assigned To</th>
-                    <th className="pb-3 font-semibold">Borrowed By</th>
-                    <th className="pb-3 font-semibold">Cost</th>
-                    <th className="pb-3 font-semibold">Location</th>
-                    <th className="pb-3 font-semibold">Status</th>
-                    {canEdit && <th className="pb-3 font-semibold"></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAssets.map((a) => (
-                    <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors">
-                      <td className="py-3 font-mono text-xs font-medium text-brand-deep">{a.asset_tag}</td>
-                      <td className="py-3">
-                        <span className="font-medium text-gray-900">{a.item_name}</span>
-                        <span className="ml-2 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                          {(a.category || "other").replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <span className="font-mono text-xs text-gray-600">{a.serial_number || "—"}</span>
-                      </td>
-                      <td className="py-3">{a.assignee_name || "—"}</td>
-                      <td className="py-3">
-                        {a.borrower_name ? (
-                          <div>
-                            <span className="font-medium">{a.borrower_name}</span>
-                            {a.return_requested && (
-                              <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 shadow-sm">
-                                Return requested
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="py-3">
-                        {a.purchase_cost ? (
-                          <span className="font-medium">{a.purchase_cost} ETB</span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="py-3">{a.location || "—"}</td>
-                      <td className="py-3">
-                        {canEdit ? (
-                          <select
-                            value={a.status}
-                            onChange={(e) =>
-                              handleStatusChange(a.id, e.target.value)
-                            }
-                            className={`rounded-full border-0 px-3 py-1.5 text-xs font-medium shadow-sm transition-all duration-200 hover:shadow-md ${
-                              statusColors[a.status]
-                            }`}
-                          >
-                            <option value="new">New</option>
-                            <option value="in_use">In Use</option>
-                            <option value="under_repair">Under Repair</option>
-                            <option value="retired">Retired</option>
-                          </select>
-                        ) : (
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1.5 text-xs font-medium shadow-sm ${
-                              statusColors[a.status]
-                            }`}
-                          >
-                            {(a.status || "").replace("_", " ")}
-                          </span>
-                        )}
-                      </td>
-                      {canEdit && (
-                        <td className="py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => handleEditClick(a)}
-                              className="rounded-full px-3 py-1.5 text-xs font-medium text-brand-deep hover:bg-brand/10 transition-all duration-200 hover:scale-105"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(a.id)}
-                              className="rounded-full px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-all duration-200 hover:scale-105"
-                            >
-                              Delete
-                            </button>
-                            {a.borrowed_by && (
-                              <button
-                                onClick={() => handleConfirmReturn(a.id)}
-                                className="rounded-full px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-all duration-200 hover:scale-105"
-                              >
-                                Confirm Return
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-8">
+              {(() => {
+                // Group assets by category
+                const grouped = filteredAssets.reduce((acc, a) => {
+                  const cat = a.category || "other";
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(a);
+                  return acc;
+                }, {} as Record<string, typeof filteredAssets>);
+
+                const categoryLabels: Record<string, string> = {
+                  electronics: "Electronics",
+                  furniture: "Furniture",
+                  vehicle: "Vehicles",
+                  office_supplies: "Office Supplies",
+                  other: "Other",
+                };
+
+                const categoryIcons: Record<string, string> = {
+                  electronics: "💻",
+                  furniture: "🪑",
+                  vehicle: "🚗",
+                  office_supplies: "📦",
+                  other: "📦",
+                };
+
+                return Object.entries(grouped).map(([category, assets]) => (
+                  <div key={category} className="fade-in">
+                    <div className="mb-4 flex items-center gap-3 border-b-2 border-brand/20 pb-3">
+                      <span className="text-3xl">{categoryIcons[category] || "📦"}</span>
+                      <div>
+                        <h3 className="text-xl font-bold text-brand-deep">
+                          {categoryLabels[category] || category}
+                        </h3>
+                        <p className="text-sm text-gray-500">{assets.length} item{assets.length !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-600">
+                            <th className="px-4 py-3 font-semibold">Tag</th>
+                            <th className="px-4 py-3 font-semibold">Item</th>
+                            <th className="px-4 py-3 font-semibold">Serial No</th>
+                            <th className="px-4 py-3 font-semibold">Assigned To</th>
+                            <th className="px-4 py-3 font-semibold">Borrowed By</th>
+                            <th className="px-4 py-3 font-semibold">Cost</th>
+                            <th className="px-4 py-3 font-semibold">Location</th>
+                            <th className="px-4 py-3 font-semibold">Status</th>
+                            {canEdit && <th className="px-4 py-3 font-semibold"></th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {assets.map((a) => (
+                            <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors">
+                              <td className="px-4 py-3 font-mono text-xs font-medium text-brand-deep">{a.asset_tag}</td>
+                              <td className="px-4 py-3">
+                                <span className="font-medium text-gray-900">{a.item_name}</span>
+                                {a.electronics_subcategory && (
+                                  <span className="ml-2 text-xs text-brand-deep bg-brand/10 px-2 py-0.5 rounded-full">
+                                    {(a.electronics_subcategory || "").replace("_", " ")}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="font-mono text-xs text-gray-600">{a.serial_number || "—"}</span>
+                              </td>
+                              <td className="px-4 py-3">{a.assignee_name || "—"}</td>
+                              <td className="px-4 py-3">
+                                {a.borrower_name ? (
+                                  <div>
+                                    <span className="font-medium">{a.borrower_name}</span>
+                                    {a.return_requested && (
+                                      <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 shadow-sm">
+                                        Return requested
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {a.purchase_cost ? (
+                                  <span className="font-medium">{a.purchase_cost} ETB</span>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">{a.location || "—"}</td>
+                              <td className="px-4 py-3">
+                                {canEdit ? (
+                                  <select
+                                    value={a.status}
+                                    onChange={(e) =>
+                                      handleStatusChange(a.id, e.target.value)
+                                    }
+                                    className={`rounded-full border-0 px-3 py-1.5 text-xs font-medium shadow-sm transition-all duration-200 hover:shadow-md ${
+                                      statusColors[a.status]
+                                    }`}
+                                  >
+                                    <option value="new">New</option>
+                                    <option value="in_use">In Use</option>
+                                    <option value="under_repair">Under Repair</option>
+                                    <option value="retired">Retired</option>
+                                  </select>
+                                ) : (
+                                  <span
+                                    className={`inline-flex rounded-full px-3 py-1.5 text-xs font-medium shadow-sm ${
+                                      statusColors[a.status]
+                                    }`}
+                                  >
+                                    {(a.status || "").replace("_", " ")}
+                                  </span>
+                                )}
+                              </td>
+                              {canEdit && (
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      onClick={() => handleEditClick(a)}
+                                      className="rounded-full px-3 py-1.5 text-xs font-medium text-brand-deep hover:bg-brand/10 transition-all duration-200 hover:scale-105"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(a.id)}
+                                      className="rounded-full px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-all duration-200 hover:scale-105"
+                                    >
+                                      Delete
+                                    </button>
+                                    {a.borrowed_by && (
+                                      <button
+                                        onClick={() => handleConfirmReturn(a.id)}
+                                        className="rounded-full px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-all duration-200 hover:scale-105"
+                                      >
+                                        Confirm Return
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           )}
         </div>

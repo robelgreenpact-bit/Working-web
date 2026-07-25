@@ -130,7 +130,7 @@ export default function Navbar({ title }: { title: string }) {
             </svg>
           </button>
           {assetsDropdownOpen && (
-            <div className="absolute left-0 top-full z-50 mt-2 rounded-xl border border-gray-200 bg-white/95 backdrop-blur-sm p-2 shadow-xl fade-in min-w-[160px]">
+            <div className="absolute left-0 top-full z-50 mt-2 rounded-xl border border-gray-200 bg-white/95 backdrop-blur-sm p-2 shadow-xl fade-in min-w-40">
               <a
                 href="/assets"
                 onClick={() => {
@@ -296,7 +296,7 @@ export default function Navbar({ title }: { title: string }) {
           ) : null}
           <button
             onClick={handleLogout}
-            className="hidden rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-5 py-2 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 md:block"
+            className="hidden rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-5 py-2 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 md:block"
           >
             Log Out
           </button>
@@ -347,7 +347,7 @@ export default function Navbar({ title }: { title: string }) {
           {links}
           <button
             onClick={handleLogout}
-            className="mt-2 rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-4 py-3 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl"
+            className="mt-2 rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-4 py-3 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl"
           >
             Log Out
           </button>
