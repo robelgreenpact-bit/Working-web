@@ -3,21 +3,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import fs from "fs";
 import path from "path";
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
-  AlignmentType,
-  BorderStyle,
-  ImageRun,
-  ShadingType,
-  VerticalAlign,
-} from "docx";
+import PDFDocument from "pdfkit";
 
 function getServiceClient() {
   return createServiceClient(
@@ -26,38 +12,8 @@ function getServiceClient() {
   );
 }
 
-const BRAND_GREEN = "8FBC6B";
-const DARK_GREEN = "1E9E5A";
-
-const noBorder = {
-  top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-  bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-  left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-  right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-};
-
-const thinBorder = {
-  top: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-  bottom: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-  left: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-  right: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-};
-
-function cellText(
-  text: string,
-  opts: { bold?: boolean; color?: string; size?: number } = {},
-) {
-  return new Paragraph({
-    children: [
-      new TextRun({
-        text,
-        bold: opts.bold,
-        color: opts.color,
-        size: opts.size || 20,
-      }),
-    ],
-  });
-}
+const BRAND_GREEN = "#8FBC6B";
+const DARK_GREEN = "#1E9E5A";
 
 export async function GET(
   request: Request,
@@ -92,16 +48,6 @@ export async function GET(
     .eq("id", pr.created_by)
     .single();
 
-  let approverName = "";
-  if (pr.decided_by) {
-    const { data: approver } = await serviceClient
-      .from("public_users")
-      .select("name")
-      .eq("id", pr.decided_by)
-      .single();
-    approverName = approver?.name || "";
-  }
-
   const items = pr.payment_request_items || [];
   const subtotal = items.reduce(
     (sum: number, it: { qty: number; unit_price: number }) =>
@@ -120,499 +66,209 @@ export async function GET(
     logoBuffer = null;
   }
 
-  const dateStr = new Date(pr.created_at).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const dateStr = pr.required_date
+    ? new Date(pr.required_date).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : new Date(pr.created_at).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
 
   const priorities = ["emergency", "urgent", "regular"];
 
-  const doc = new Document({
-    sections: [
-      {
-        properties: {},
-        children: [
-          // Top green bar
-          new Paragraph({
-            spacing: { after: 100 },
-            shading: {
-              type: ShadingType.SOLID,
-              color: BRAND_GREEN,
-              fill: BRAND_GREEN,
-            },
-            children: [new TextRun({ text: " " })],
-          }),
+  // Create PDF document
+  const doc = new PDFDocument({ margin: 50, size: "A4" });
+  const chunks: Buffer[] = [];
 
-          // Logo + Company name
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: noBorder,
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    width: { size: 20, type: WidthType.PERCENTAGE },
-                    borders: noBorder,
-                    verticalAlign: VerticalAlign.CENTER,
-                    children: logoBuffer
-                      ? [
-                          new Paragraph({
-                            children: [
-                              new ImageRun({
-                                data: logoBuffer,
-                                transformation: { width: 60, height: 60 },
-                                type: "png",
-                              }),
-                            ],
-                          }),
-                        ]
-                      : [new Paragraph("")],
-                  }),
-                  new TableCell({
-                    width: { size: 80, type: WidthType.PERCENTAGE },
-                    borders: noBorder,
-                    verticalAlign: VerticalAlign.CENTER,
-                    children: [
-                      new Paragraph({
-                        alignment: AlignmentType.CENTER,
-                        children: [
-                          new TextRun({
-                            text: "Greenpact Trading PLC",
-                            bold: true,
-                            size: 32,
-                            color: DARK_GREEN,
-                          }),
-                        ],
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-            ],
-          }),
+  doc.on("data", (chunk) => chunks.push(chunk));
+  doc.on("end", () => {});
 
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "Address 1: Bahirdar, Ethiopia",
-                size: 16,
-              }),
-            ],
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "Address 2: Addis Ababa, Ethiopia",
-                size: 16,
-              }),
-            ],
-          }),
-          new Paragraph({
-            spacing: { after: 200 },
-            children: [
-              new TextRun({
-                text: "Email- info@greenpactconsulting.com; www.greenpactconsulting.org",
-                size: 16,
-              }),
-            ],
-          }),
+  // Helper function for text
+  const text = (str: string, options: any = {}) => {
+    doc.fontSize(options.size || 12).fillColor(options.color || "black");
+    if (options.bold) doc.font("Helvetica-Bold");
+    else doc.font("Helvetica");
+    doc.text(str, options);
+  };
 
-          // Title bar
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: noBorder,
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    shading: {
-                      type: ShadingType.SOLID,
-                      color: BRAND_GREEN,
-                      fill: BRAND_GREEN,
-                    },
-                    borders: noBorder,
-                    children: [
-                      new Paragraph({
-                        alignment: AlignmentType.CENTER,
-                        children: [
-                          new TextRun({
-                            text: "Purchase Request Authorization Form",
-                            bold: true,
-                            size: 24,
-                          }),
-                        ],
-                      }),
-                      new Paragraph({
-                        alignment: AlignmentType.CENTER,
-                        children: [
-                          new TextRun({
-                            text: "( This form is for any Service and Goods purchase request )",
-                            italics: true,
-                            size: 18,
-                          }),
-                        ],
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-            ],
-          }),
+  // Top green bar
+  doc.rect(50, 50, 495, 20).fill(BRAND_GREEN);
 
-          new Paragraph({ text: "", spacing: { after: 200 } }),
+  // Logo and company name
+  if (logoBuffer) {
+    doc.image(logoBuffer, 50, 80, { width: 60, height: 60 });
+  }
+  doc.fontSize(22).fillColor(DARK_GREEN).font("Helvetica-Bold");
+  doc.text("Greenpact Research Solutions", 130, 90, { align: "center" });
 
-          // Info fields
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: noBorder,
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    width: { size: 30, type: WidthType.PERCENTAGE },
-                    children: [cellText("Date", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText(dateStr)],
-                  }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("PR Number", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText(pr.pr_number)],
-                  }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("Requestor Name", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText(requester?.name || "Unknown")],
-                  }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("Project Name /Class", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText(pr.project_class || "")],
-                  }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    children: [
-                      cellText("Activity Line (Purpose)", { bold: true }),
-                    ],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText(pr.activity_line || "")],
-                  }),
-                ],
-              }),
-            ],
-          }),
-
-          new Paragraph({ text: "", spacing: { after: 200 } }),
-
-          // Vendor + priority
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: noBorder,
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    width: { size: 55, type: WidthType.PERCENTAGE },
-                    borders: thinBorder,
-                    children: [
-                      cellText("SUGGESTED VENDOR(S):", { bold: true }),
-                      cellText(pr.suggested_vendor || ""),
-                    ],
-                  }),
-                  new TableCell({
-                    width: { size: 45, type: WidthType.PERCENTAGE },
-                    borders: thinBorder,
-                    children: [
-                      cellText("SUPPLY PRIORITY:", { bold: true }),
-                      ...priorities.map((p) =>
-                        cellText(
-                          `${pr.supply_priority === p ? "[X]" : "[ ]"} ${
-                            p.charAt(0).toUpperCase() + p.slice(1)
-                          }`,
-                        ),
-                      ),
-                    ],
-                  }),
-                ],
-              }),
-            ],
-          }),
-
-          new Paragraph({ text: "", spacing: { after: 200 } }),
-
-          // Items table
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: thinBorder,
-            rows: [
-              new TableRow({
-                children: [
-                  "Item Name",
-                  "Description",
-                  "Unit",
-                  "Qty",
-                  "Unit price",
-                  "Total price",
-                ].map(
-                  (h) =>
-                    new TableCell({
-                      shading: {
-                        type: ShadingType.SOLID,
-                        color: BRAND_GREEN,
-                        fill: BRAND_GREEN,
-                      },
-                      borders: thinBorder,
-                      children: [cellText(h, { bold: true })],
-                    }),
-                ),
-              }),
-              ...items.map(
-                (it: {
-                  item_name: string;
-                  description: string | null;
-                  unit: string | null;
-                  qty: number;
-                  unit_price: number;
-                  total_price: number;
-                }) =>
-                  new TableRow({
-                    children: [
-                      it.item_name,
-                      it.description || "",
-                      it.unit || "",
-                      String(it.qty),
-                      it.unit_price.toFixed(2),
-                      it.total_price.toFixed(2),
-                    ].map(
-                      (val) =>
-                        new TableCell({
-                          borders: thinBorder,
-                          children: [cellText(String(val))],
-                        }),
-                    ),
-                  }),
-              ),
-            ],
-          }),
-
-          new Paragraph({ text: "", spacing: { after: 100 } }),
-
-          // Totals
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: noBorder,
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    width: { size: 70, type: WidthType.PERCENTAGE },
-                    borders: noBorder,
-                    children: [new Paragraph("")],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("Subtotal", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText(subtotal.toFixed(2))],
-                  }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    children: [new Paragraph("")],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("VAT(15%)", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText(vat.toFixed(2))],
-                  }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    children: [new Paragraph("")],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("Total", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [
-                      cellText(total.toFixed(2), {
-                        bold: true,
-                        color: "C00000",
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-            ],
-          }),
-
-          new Paragraph({ text: "", spacing: { after: 200 } }),
-
-          // Note
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: noBorder,
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    width: { size: 20, type: WidthType.PERCENTAGE },
-                    borders: noBorder,
-                    children: [cellText("Note /Comment", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: thinBorder,
-                    children: [cellText(pr.decision_comment || "")],
-                  }),
-                ],
-              }),
-            ],
-          }),
-
-          new Paragraph({ text: "", spacing: { after: 300 } }),
-
-          // Signatures
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: noBorder,
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    width: { size: 15, type: WidthType.PERCENTAGE },
-                    borders: noBorder,
-                    children: [cellText("Requested By", { bold: true })],
-                  }),
-                  new TableCell({
-                    width: { size: 35, type: WidthType.PERCENTAGE },
-                    borders: noBorder,
-                    children: [cellText(requester?.name || "")],
-                  }),
-                  new TableCell({
-                    width: { size: 20, type: WidthType.PERCENTAGE },
-                    borders: noBorder,
-                    children: [cellText("Approved by Manager", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText(approverName)],
-                  }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("Signature", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [new Paragraph("")],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("Signature", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [new Paragraph("")],
-                  }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("Date", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [new Paragraph("")],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [cellText("Date", { bold: true })],
-                  }),
-                  new TableCell({
-                    borders: noBorder,
-                    children: [new Paragraph("")],
-                  }),
-                ],
-              }),
-            ],
-          }),
-
-          new Paragraph({ text: "", spacing: { before: 400 } }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({
-                text: "Greenpact Trading PLC, Addis Ababa, Ethiopia, Email- info@greenpactconsulting.com, www.greenpactconsulting.com",
-                size: 14,
-                color: "999999",
-              }),
-            ],
-          }),
-        ],
-      },
-    ],
+  // Title bar
+  doc.rect(50, 150, 495, 40).fill(BRAND_GREEN);
+  doc.fontSize(22).fillColor("white").font("Helvetica-Bold");
+  doc.text("Purchase Request Authorization Form", 50, 160, { align: "center" });
+  doc.fontSize(12).fillColor("white").font("Helvetica-Oblique");
+  doc.text("( This form is for any Service and Goods purchase request )", 50, 180, {
+    align: "center",
   });
 
-  const buffer = await Packer.toBuffer(doc);
+  doc.moveDown(2);
 
-  return new NextResponse(new Uint8Array(buffer), {
-    headers: {
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "Content-Disposition": `attachment; filename="GP_PR_${pr.pr_number}_${new Date(
-        pr.created_at,
-      )
-        .toISOString()
-        .slice(0, 10)}.docx"`,
-    },
+  // Info fields
+  const lineHeight = 20;
+  let y = doc.y;
+
+  text("Date:", { bold: true });
+  doc.text(dateStr, { continued: false });
+  y = doc.y + 10;
+
+  text("PR Number:", { bold: true });
+  doc.text(pr.pr_number, { continued: false });
+  y = doc.y + 10;
+
+  text("Requestor Name:", { bold: true });
+  doc.text(requester?.name || "Unknown", { continued: false });
+  y = doc.y + 10;
+
+  text("Project Name /Class:", { bold: true });
+  doc.text(pr.project_class || "", { continued: false });
+  y = doc.y + 10;
+
+  text("Activity Line (Purpose):", { bold: true });
+  doc.text(pr.activity_line || "", { continued: false });
+
+  doc.moveDown(2);
+
+  // Vendor and priority
+  doc.rect(50, doc.y, 270, 60).stroke();
+  doc.rect(320, doc.y, 225, 60).stroke();
+
+  const vendorY = doc.y;
+  text("SUGGESTED VENDOR(S):", { bold: true, x: 55, y: vendorY + 5 });
+  doc.text(pr.suggested_vendor || "", { x: 55, y: vendorY + 25 });
+
+  text("SUPPLY PRIORITY:", { bold: true, x: 325, y: vendorY + 5 });
+  priorities.forEach((p, i) => {
+    const checked = pr.supply_priority === p ? "[X]" : "[ ]";
+    doc.text(
+      `${checked} ${p.charAt(0).toUpperCase() + p.slice(1)}`,
+      { x: 325, y: vendorY + 25 + i * 12 },
+    );
+  });
+
+  doc.moveDown(4);
+
+  // Items table
+  const tableTop = doc.y;
+  const colWidths = [100, 120, 50, 40, 60, 60];
+  const rowHeight = 25;
+
+  // Header
+  doc.rect(50, tableTop, 495, rowHeight).fill(BRAND_GREEN);
+  doc.fillColor("white").fontSize(12).font("Helvetica-Bold");
+  const headers = ["Item Name", "Description", "Unit", "Qty", "Unit price", "Total price"];
+  headers.forEach((h, i) => {
+    doc.text(h, 55 + colWidths.slice(0, i).reduce((a, b) => a + b, 0), tableTop + 8);
+  });
+
+  // Items
+  doc.fillColor("black").fontSize(10).font("Helvetica");
+  items.forEach((it: any, i: number) => {
+    const rowY = tableTop + rowHeight + i * rowHeight;
+    doc.rect(50, rowY, 495, rowHeight).stroke();
+    const values = [
+      it.item_name,
+      it.description || "",
+      it.unit || "",
+      String(it.qty),
+      it.unit_price.toFixed(2),
+      it.total_price.toFixed(2),
+    ];
+    values.forEach((val, j) => {
+      doc.text(
+        val,
+        55 + colWidths.slice(0, j).reduce((a, b) => a + b, 0),
+        rowY + 8,
+        { width: colWidths[j] - 10, ellipsis: true },
+      );
+    });
+  });
+
+  doc.moveDown(4);
+
+  // Totals
+  const totalsY = doc.y;
+  text("Subtotal:", { bold: true, x: 400, y: totalsY });
+  doc.text(subtotal.toFixed(2), { x: 450, y: totalsY });
+
+  text("VAT(15%):", { bold: true, x: 400, y: totalsY + 20 });
+  doc.text(vat.toFixed(2), { x: 450, y: totalsY + 20 });
+
+  text("Total:", { bold: true, color: "#C00000", x: 400, y: totalsY + 40 });
+  doc.text(total.toFixed(2), { x: 450, y: totalsY + 40 });
+
+  doc.moveDown(3);
+
+  // Note
+  doc.rect(50, doc.y, 120, 30).stroke();
+  doc.rect(170, doc.y, 375, 30).stroke();
+  text("Note /Comment:", { bold: true, x: 55, y: doc.y + 5 });
+  doc.text(pr.decision_comment || "", { x: 175, y: doc.y + 5 });
+
+  doc.moveDown(4);
+
+  // Signatures
+  const sigY = doc.y;
+  text("Requested By:", { bold: true, x: 50, y: sigY });
+  doc.text(requester?.name || "", { x: 150, y: sigY });
+
+  text("Approved by:", { bold: true, x: 300, y: sigY });
+  doc.text("Solomon Bizuayehu", { x: 380, y: sigY });
+
+  doc.text("Signature:", { bold: true, x: 50, y: sigY + 30 });
+  doc.rect(150, sigY + 30, 100, 20).stroke();
+
+  doc.text("Signature:", { bold: true, x: 300, y: sigY + 30 });
+  doc.rect(380, sigY + 30, 100, 20).stroke();
+
+  doc.text("Date:", { bold: true, x: 50, y: sigY + 60 });
+  doc.rect(150, sigY + 60, 100, 20).stroke();
+
+  doc.text("Date:", { bold: true, x: 300, y: sigY + 60 });
+  doc.rect(380, sigY + 60, 100, 20).stroke();
+
+  doc.moveDown(6);
+
+  // Footer
+  if (logoBuffer) {
+    doc.image(logoBuffer, 50, doc.y, { width: 50, height: 50 });
+  }
+  doc.fontSize(10).fillColor("#666666");
+  doc.text("Address 1: Kebele 01, Bahir Dar, Ethiopia", { x: 110, y: doc.y - 40 });
+  doc.text("Address 2: Yeka subcity, woreda 09, Addis Ababa, Ethiopia", { x: 110, y: doc.y - 28 });
+  doc.text("Phone: +251939965895", { x: 110, y: doc.y - 16 });
+  doc.text("Email: info@greenpactconsulting.com", { x: 110, y: doc.y - 4 });
+  doc.text("Website: www.greenpactconsulting.com", { x: 110, y: doc.y + 8 });
+
+  doc.end();
+
+  return new Promise((resolve) => {
+    doc.on("end", () => {
+      const pdfBuffer = Buffer.concat(chunks);
+      resolve(
+        new NextResponse(pdfBuffer, {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="GP_PR_${pr.pr_number}_${new Date(
+              pr.created_at,
+            )
+              .toISOString()
+              .slice(0, 10)}.pdf"`,
+          },
+        }),
+      );
+    });
   });
 }

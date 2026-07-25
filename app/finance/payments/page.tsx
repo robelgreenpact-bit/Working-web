@@ -19,6 +19,7 @@ type PaymentRequest = {
   activity_line: string;
   suggested_vendor: string | null;
   supply_priority: string;
+  required_date: string | null;
   amount: number;
   status: string;
   decision_comment: string | null;
@@ -60,6 +61,7 @@ export default function FinancePaymentsPage() {
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -121,8 +123,13 @@ export default function FinancePaymentsPage() {
       }
     }
 
-    const res = await fetch("/api/payment-requests", {
-      method: "POST",
+    const url = editingId
+      ? `/api/payment-requests/${editingId}`
+      : "/api/payment-requests";
+    const method = editingId ? "PUT" : "POST";
+
+    const res = await fetch(url, {
+      method,
       body: formData,
     });
 
@@ -132,6 +139,10 @@ export default function FinancePaymentsPage() {
     if (!res.ok) {
       setError(data.error || "Failed to submit payment request");
       return;
+    }
+
+    if (editingId) {
+      setEditingId(null);
     }
 
     setProjectClass("");
@@ -158,6 +169,50 @@ export default function FinancePaymentsPage() {
     loadRequests();
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this payment request? This cannot be undone.")) return;
+    const res = await fetch(`/api/payment-requests/${id}`, {
+      method: "DELETE",
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to delete");
+      return;
+    }
+    loadRequests();
+  };
+
+  const handleEdit = (r: PaymentRequest) => {
+    setEditingId(r.id);
+    setProjectClass(r.project_class || "");
+    setActivityLine(r.activity_line || "");
+    setVendor(r.suggested_vendor || "");
+    setPriority(r.supply_priority || "regular");
+    setRequiredDate(r.required_date || "");
+    setItems(
+      r.payment_request_items.map((it) => ({
+        item_name: it.item_name,
+        description: it.description || "",
+        unit: it.unit || "",
+        qty: it.qty,
+        unit_price: it.unit_price,
+      }))
+    );
+    setShowForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setShowForm(false);
+    setProjectClass("");
+    setActivityLine("");
+    setVendor("");
+    setPriority("regular");
+    setRequiredDate("");
+    setItems([emptyItem()]);
+    setFiles(null);
+  };
+
   return (
     <div>
       <Navbar title="Payment Requests" />
@@ -167,7 +222,13 @@ export default function FinancePaymentsPage() {
             Purchase Request Authorization
           </h1>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              if (editingId) {
+                handleCancelEdit();
+              } else {
+                setShowForm(!showForm);
+              }
+            }}
             className="rounded bg-brand-deep px-4 py-2 font-medium text-white transition hover:bg-brand-dark"
           >
             {showForm ? "Cancel" : "+ New PR"}
@@ -370,7 +431,7 @@ export default function FinancePaymentsPage() {
               disabled={submitting}
               className="rounded bg-brand-deep px-4 py-2 font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
             >
-              {submitting ? "Submitting..." : "Submit for Approval"}
+              {submitting ? "Submitting..." : editingId ? "Update PR" : "Submit for Approval"}
             </button>
           </form>
         )}
@@ -441,6 +502,22 @@ export default function FinancePaymentsPage() {
                       >
                         Mark as Paid
                       </button>
+                    )}
+                    {r.status === "pending_manager" && (
+                      <>
+                        <button
+                          onClick={() => handleEdit(r)}
+                          className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(r.id)}
+                          className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={() =>
