@@ -564,7 +564,7 @@ export default function AssetsPage() {
                                     >
                                       Delete
                                     </button>
-                                    {a.borrowed_by && (
+                                    {a.borrowed_by && a.return_requested && (
                                       <button
                                         onClick={() => handleConfirmReturn(a.id)}
                                         className="rounded-full px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-all duration-200 hover:scale-105"
