@@ -289,8 +289,8 @@ export async function GET(
     borderColor: GRAY,
     borderWidth: 1,
   });
-  page.drawText("Note /Comment:", { x: 55, y: y - 5, size: 10, font: fontBold });
-  page.drawText(pr.decision_comment || "", { x: 160, y: y - 5, size: 10, font: font });
+  page.drawText("Note /Comment:", { x: 55, y: y - 8, size: 10, font: fontBold });
+  page.drawText(pr.decision_comment || "", { x: 160, y: y - 8, size: 10, font: font });
   y -= 40;
 
   // Signatures
