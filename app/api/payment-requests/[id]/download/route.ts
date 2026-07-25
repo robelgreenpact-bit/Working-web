@@ -3,7 +3,34 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import fs from "fs";
 import path from "path";
-import PDFDocument from "pdfkit";
+
+// Type declaration for PDFKit
+declare module "pdfkit" {
+  interface PDFKit {
+    on(event: string, callback: (chunk: Buffer) => void): void;
+    end(): void;
+    rect(x: number, y: number, w: number, h: number): this;
+    fill(color: string): this;
+    stroke(): this;
+    image(buffer: Buffer, x: number, y: number, options: { width: number; height: number }): void;
+    fontSize(size: number): this;
+    fillColor(color: string): this;
+    font(font: string): this;
+    text(text: string, options?: any): this;
+    moveDown(lines?: number): this;
+  }
+  interface PDFKitOptions {
+    margin?: number;
+    size?: string;
+  }
+  class PDFDocument {
+    constructor(options?: PDFKitOptions);
+    on(event: string, callback: () => void): void;
+  }
+  export = PDFDocument;
+}
+
+const PDFDocument = require("pdfkit");
 
 function getServiceClient() {
   return createServiceClient(

@@ -185,7 +185,7 @@ export default function AssetsPage() {
               onClick={() =>
                 showForm ? handleCancelForm() : setShowForm(true)
               }
-              className="rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
+              className="rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
             >
               {showForm ? "Cancel" : "+ Add Asset"}
             </button>
@@ -313,7 +313,7 @@ export default function AssetsPage() {
             <button
               type="submit"
               disabled={creating}
-              className="rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-6 py-3 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed sm:col-span-2"
+              className="rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-6 py-3 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed sm:col-span-2"
             >
               {creating
                 ? "Saving..."
@@ -329,7 +329,7 @@ export default function AssetsPage() {
             onClick={() =>
               (window.location.href = "/api/reports/assets?format=xlsx")
             }
-            className="rounded-full bg-gradient-to-r from-brand-deep to-brand-dark px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
+            className="rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
           >
             Download Excel
           </button>
