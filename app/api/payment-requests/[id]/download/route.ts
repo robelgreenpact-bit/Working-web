@@ -294,9 +294,9 @@ export async function GET(
   y -= 40;
 
   // Signatures
-  page.drawText("Requested By:", { x: 50, y, size: 12, font: fontBold });
+  page.drawText("Requested By: ", { x: 50, y, size: 12, font: fontBold });
   page.drawText(requester?.name || "", { x: 130, y, size: 12, font: font });
-  page.drawText("Approved by:", { x: 300, y, size: 12, font: fontBold });
+  page.drawText("Approved by: ", { x: 300, y, size: 12, font: fontBold });
   page.drawText("Solomon Bizuayehu", { x: 380, y, size: 12, font: font });
   y -= 20;
 
@@ -314,8 +314,8 @@ export async function GET(
 
   // Footer at bottom of page with three-section layout
   const footerY = 70;
-  const footerStartX = 40;
-  const footerWidth = width - 80;
+  const footerStartX = 30;
+  const footerWidth = width - 60;
   
   // Load and embed logo image from filesystem
   let logoImage;
@@ -332,26 +332,26 @@ export async function GET(
   }
   
   // First vertical divider (after logo section)
-  const divider1X = footerStartX + 160;
+  const divider1X = footerStartX + 140;
   page.drawLine({
-    start: { x: divider1X, y: footerY + 35 },
-    end: { x: divider1X, y: footerY - 25 },
+    start: { x: divider1X, y: footerY + 30 },
+    end: { x: divider1X, y: footerY - 20 },
     thickness: 1,
     color: rgb(0, 0, 0),
   });
   
   // Second vertical divider (after address section)
-  const divider2X = footerStartX + 320;
+  const divider2X = footerStartX + 280;
   page.drawLine({
-    start: { x: divider2X, y: footerY + 35 },
-    end: { x: divider2X, y: footerY - 25 },
+    start: { x: divider2X, y: footerY + 30 },
+    end: { x: divider2X, y: footerY - 20 },
     thickness: 1,
     color: rgb(0, 0, 0),
   });
   
   // Left Section - Logo image
   if (logoImage) {
-    const logoDims = logoImage.scale(0.08);
+    const logoDims = logoImage.scale(0.06);
     page.drawImage(logoImage, {
       x: footerStartX + 10,
       y: footerY - 5,
@@ -370,89 +370,89 @@ export async function GET(
   }
   
   // Middle Section - Addresses
-  const addressX = divider1X + 15;
+  const addressX = divider1X + 10;
   page.drawText("Address 1", {
     x: addressX,
-    y: footerY + 25,
-    size: 11,
+    y: footerY + 20,
+    size: 9,
     font: fontBold,
     color: rgb(0, 0, 0),
   });
   page.drawText("Kebele 01, Bahir Dar, Ethiopia", {
     x: addressX,
-    y: footerY + 12,
-    size: 10,
+    y: footerY + 10,
+    size: 8,
     font: font,
     color: rgb(0, 0, 0),
   });
   page.drawText("Address 2", {
     x: addressX,
     y: footerY - 2,
-    size: 11,
+    size: 9,
     font: fontBold,
     color: rgb(0, 0, 0),
   });
   page.drawText("Yeka subcity, woreda 09,", {
     x: addressX,
-    y: footerY - 15,
-    size: 10,
+    y: footerY - 12,
+    size: 8,
     font: font,
     color: rgb(0, 0, 0),
   });
   page.drawText("Addis Ababa, Ethiopia", {
     x: addressX,
-    y: footerY - 27,
-    size: 10,
+    y: footerY - 22,
+    size: 8,
     font: font,
     color: rgb(0, 0, 0),
   });
   
   // Right Section - Contact Info
-  const contactX = divider2X + 15;
+  const contactX = divider2X + 10;
   const labelX = contactX;
-  const valueX = contactX + 80;
+  const valueX = contactX + 60;
   
   page.drawText("PHONE 1", {
     x: labelX,
-    y: footerY + 25,
-    size: 10,
+    y: footerY + 20,
+    size: 8,
     font: fontBold,
     color: rgb(0, 0, 0),
   });
   page.drawText("+251939965895", {
     x: valueX,
-    y: footerY + 25,
-    size: 10,
+    y: footerY + 20,
+    size: 8,
     font: font,
     color: rgb(0, 0, 0),
   });
   
   page.drawText("EMAIL", {
     x: labelX,
-    y: footerY + 10,
-    size: 10,
+    y: footerY + 8,
+    size: 8,
     font: fontBold,
     color: rgb(0, 0, 0),
   });
   page.drawText("info@greenpactconsulting.com", {
     x: valueX,
-    y: footerY + 10,
-    size: 10,
+    y: footerY + 8,
+    size: 8,
     font: font,
     color: rgb(0, 0, 0),
   });
   
   page.drawText("WEBSITE", {
     x: labelX,
-    y: footerY - 5,
-    size: 10,
+    y: footerY - 4,
+    size: 8,
     font: fontBold,
     color: rgb(0, 0, 0),
   });
   page.drawText("www.greenpactconsulting.com", {
     x: valueX,
-    y: footerY - 5,
-    size: 10,
+    y: footerY - 4,
+    size: 8,
     font: font,
     color: rgb(0, 0, 0),
   });
