@@ -22,10 +22,12 @@ export async function POST(
     return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
   }
 
+  const newStatus = decision === "approved" ? "pending_finance" : "rejected";
+
   const { error } = await supabase
     .from("payment_requests")
     .update({
-      status: decision,
+      status: newStatus,
       decided_by: user.id,
       decision_comment: comment || null,
     })

@@ -45,7 +45,7 @@ type AvailableAsset = {
 
 function daysAgo(dateStr: string) {
   const days = Math.floor(
-    (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24)
+    (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24),
   );
   if (days === 0) return "Today";
   if (days === 1) return "1 day ago";
@@ -58,7 +58,7 @@ export default function FinancePage() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>(
-    {}
+    {},
   );
   const [processing, setProcessing] = useState<string | null>(null);
   const [availableAssets, setAvailableAssets] = useState<AvailableAsset[]>([]);
@@ -96,7 +96,7 @@ export default function FinancePage() {
 
   const handleDecision = async (
     id: string,
-    decision: "approved" | "rejected"
+    decision: "approved" | "rejected",
   ) => {
     setProcessing(id);
     const chosenAssetIds = inventoryChoice[id] || [];
@@ -163,9 +163,7 @@ export default function FinancePage() {
                 </div>
 
                 {r.description && (
-                  <p className="mb-2 text-sm text-gray-700">
-                    {r.description}
-                  </p>
+                  <p className="mb-2 text-sm text-gray-700">{r.description}</p>
                 )}
 
                 <div className="mb-2 flex gap-6 text-sm text-gray-700">
@@ -190,8 +188,8 @@ export default function FinancePage() {
                       {r.attachments.map((a) => (
                         <li key={a.id}>
                           {a.signed_url ? (
-                            
-                             <a href={a.signed_url}
+                            <a
+                              href={a.signed_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-brand-deep hover:underline"
@@ -209,18 +207,27 @@ export default function FinancePage() {
                   </div>
                 )}
 
-                {(r.type === "physical_good" || r.type === "other_asset" || r.type === "electronics") && (
+                {(r.type === "physical_good" ||
+                  r.type === "other_asset" ||
+                  r.type === "electronics") && (
                   <div className="mb-3">
                     <label className="mb-1 block text-xs font-medium text-gray-500">
                       Fulfill from Inventory (optional)
-                      {(r.quantity || 0) > 1 && <span className="ml-2 text-amber-600">Quantity: {r.quantity}</span>}
+                      {(r.quantity || 0) > 1 && (
+                        <span className="ml-2 text-amber-600">
+                          Quantity: {r.quantity}
+                        </span>
+                      )}
                     </label>
                     <select
                       value={inventoryChoice[r.id]?.[0] || ""}
                       onChange={(e) => {
                         const selectedId = e.target.value;
                         if (!selectedId) {
-                          setInventoryChoice({ ...inventoryChoice, [r.id]: [] });
+                          setInventoryChoice({
+                            ...inventoryChoice,
+                            [r.id]: [],
+                          });
                           return;
                         }
                         setInventoryChoice({
@@ -233,22 +240,33 @@ export default function FinancePage() {
                       <option value="">— Buy new instead —</option>
                       {(() => {
                         // Group assets by item name
-                        const grouped = availableAssets.reduce((acc, a) => {
-                          const key = a.item_name || "Unknown";
-                          if (!acc[key]) acc[key] = [];
-                          acc[key].push(a);
-                          return acc;
-                        }, {} as Record<string, AvailableAsset[]>);
+                        const grouped = availableAssets.reduce(
+                          (acc, a) => {
+                            const key = a.item_name || "Unknown";
+                            if (!acc[key]) acc[key] = [];
+                            acc[key].push(a);
+                            return acc;
+                          },
+                          {} as Record<string, AvailableAsset[]>,
+                        );
 
-                        return Object.entries(grouped).map(([itemName, assets]) => (
-                          <optgroup key={itemName} label={`${itemName} (${assets.length} available)`}>
-                            {assets.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.asset_tag} — {a.item_name} ({a.category}){a.serial_number ? ` — SN: ${a.serial_number}` : ""}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ));
+                        return Object.entries(grouped).map(
+                          ([itemName, assets]) => (
+                            <optgroup
+                              key={itemName}
+                              label={`${itemName} (${assets.length} available)`}
+                            >
+                              {assets.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.asset_tag} — {a.item_name} ({a.category})
+                                  {a.serial_number
+                                    ? ` — SN: ${a.serial_number}`
+                                    : ""}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ),
+                        );
                       })()}
                     </select>
                   </div>
@@ -339,8 +357,8 @@ export default function FinancePage() {
                       r.status === "rejected"
                         ? "bg-red-100 text-red-800"
                         : r.status === "approved"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-blue-100 text-blue-800"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-blue-100 text-blue-800"
                     }`}
                   >
                     {(r.status || "").replace("_", " ")}
