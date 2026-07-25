@@ -208,17 +208,27 @@ export default function ManagerPaymentsPage() {
                       From {r.creator_name || "Unknown"} — {r.amount} ETB
                     </p>
                   </div>
-                  <span
-                    className={`rounded px-2 py-1 text-xs ${
-                      r.status === "rejected"
-                        ? "bg-red-100 text-red-800"
-                        : r.status === "paid"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-blue-100 text-blue-800"
-                    }`}
-                  >
-                    {r.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded px-2 py-1 text-xs ${
+                        r.status === "rejected"
+                          ? "bg-red-100 text-red-800"
+                          : r.status === "paid"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-blue-100 text-blue-800"
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                    <button
+                      onClick={() =>
+                        (window.location.href = `/api/payment-requests/${r.id}/download`)
+                      }
+                      className="rounded bg-gray-200 px-2 py-1 text-xs font-medium text-gray-800 hover:bg-gray-300"
+                    >
+                      Download
+                    </button>
+                  </div>
                 </div>
                 {r.decision_comment && (
                   <p className="mt-2 border-t pt-2 text-sm text-gray-600">

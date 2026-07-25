@@ -496,7 +496,7 @@ export default function FinancePaymentsPage() {
                   )}
 
                   <div className="mt-2 flex gap-2">
-                    {r.status === "approved" && (
+                    {r.status === "pending_finance" && (
                       <button
                         onClick={() => handleMarkPaid(r.id)}
                         className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
@@ -520,7 +520,7 @@ export default function FinancePaymentsPage() {
                         </button>
                       </>
                     )}
-                    {r.status === "pending_finance" && (
+                    {(r.status === "pending_finance" || r.status === "paid") && (
                       <button
                         onClick={() =>
                           (window.location.href = `/api/payment-requests/${r.id}/download`)
