@@ -12,6 +12,7 @@ function getServiceClient() {
 
 const BRAND_GREEN = rgb(0.56, 0.73, 0.42);
 const DARK_GREEN = rgb(0.12, 0.62, 0.35);
+const ORANGE_RED = rgb(1, 0.4, 0.2);
 const GRAY = rgb(0.4, 0.4, 0.4);
 
 export async function GET(
@@ -311,16 +312,147 @@ export async function GET(
   page.drawRectangle({ x: 380, y: y - 15, width: 100, height: 15, borderColor: GRAY, borderWidth: 1 });
   y -= 40;
 
-  // Footer
-  page.drawText("Address 1: Kebele 01, Bahir Dar, Ethiopia", { x: 50, y, size: 10, font: font, color: GRAY });
-  y -= 12;
-  page.drawText("Address 2: Yeka subcity, woreda 09, Addis Ababa, Ethiopia", { x: 50, y, size: 10, font: font, color: GRAY });
-  y -= 12;
-  page.drawText("Phone: +251939965895", { x: 50, y, size: 10, font: font, color: GRAY });
-  y -= 12;
-  page.drawText("Email: info@greenpactconsulting.com", { x: 50, y, size: 10, font: font, color: GRAY });
-  y -= 12;
-  page.drawText("Website: www.greenpactconsulting.com", { x: 50, y, size: 10, font: font, color: GRAY });
+  // Footer at bottom of page with three-section layout
+  const footerY = 70;
+  const footerStartX = 50;
+  const footerWidth = width - 100;
+  
+  // Load and embed logo image
+  let logoImage;
+  try {
+    const logoUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/logo.png`;
+    const logoResponse = await fetch(logoUrl);
+    const logoBuffer = await logoResponse.arrayBuffer();
+    logoImage = await pdfDoc.embedPng(logoBuffer);
+  } catch (error) {
+    console.error('Failed to load logo:', error);
+  }
+  
+  // First vertical divider (after logo section)
+  const divider1X = footerStartX + 200;
+  page.drawLine({
+    start: { x: divider1X, y: footerY + 35 },
+    end: { x: divider1X, y: footerY - 25 },
+    thickness: 1,
+    color: rgb(0, 0, 0),
+  });
+  
+  // Second vertical divider (after address section)
+  const divider2X = footerStartX + 380;
+  page.drawLine({
+    start: { x: divider2X, y: footerY + 35 },
+    end: { x: divider2X, y: footerY - 25 },
+    thickness: 1,
+    color: rgb(0, 0, 0),
+  });
+  
+  // Left Section - Logo image
+  if (logoImage) {
+    const logoDims = logoImage.scale(0.15);
+    page.drawImage(logoImage, {
+      x: footerStartX + 10,
+      y: footerY - 10,
+      width: logoDims.width,
+      height: logoDims.height,
+    });
+  } else {
+    // Fallback if logo fails to load
+    page.drawText("Logo", {
+      x: footerStartX + 30,
+      y: footerY + 10,
+      size: 12,
+      font: font,
+      color: GRAY,
+    });
+  }
+  
+  // Middle Section - Addresses
+  const addressX = divider1X + 15;
+  page.drawText("Address 1", {
+    x: addressX,
+    y: footerY + 25,
+    size: 11,
+    font: fontBold,
+    color: rgb(0, 0, 0),
+  });
+  page.drawText("Kebele 01, Bahir Dar, Ethiopia", {
+    x: addressX,
+    y: footerY + 12,
+    size: 10,
+    font: font,
+    color: rgb(0, 0, 0),
+  });
+  page.drawText("Address 2", {
+    x: addressX,
+    y: footerY - 2,
+    size: 11,
+    font: fontBold,
+    color: rgb(0, 0, 0),
+  });
+  page.drawText("Yeka subcity, woreda 09,", {
+    x: addressX,
+    y: footerY - 15,
+    size: 10,
+    font: font,
+    color: rgb(0, 0, 0),
+  });
+  page.drawText("Addis Ababa, Ethiopia", {
+    x: addressX,
+    y: footerY - 27,
+    size: 10,
+    font: font,
+    color: rgb(0, 0, 0),
+  });
+  
+  // Right Section - Contact Info
+  const contactX = divider2X + 15;
+  const labelX = contactX;
+  const valueX = contactX + 80;
+  
+  page.drawText("PHONE 1", {
+    x: labelX,
+    y: footerY + 25,
+    size: 10,
+    font: fontBold,
+    color: rgb(0, 0, 0),
+  });
+  page.drawText("+251939965895", {
+    x: valueX,
+    y: footerY + 25,
+    size: 10,
+    font: font,
+    color: rgb(0, 0, 0),
+  });
+  
+  page.drawText("EMAIL", {
+    x: labelX,
+    y: footerY + 10,
+    size: 10,
+    font: fontBold,
+    color: rgb(0, 0, 0),
+  });
+  page.drawText("info@greenpactconsulting.com", {
+    x: valueX,
+    y: footerY + 10,
+    size: 10,
+    font: font,
+    color: rgb(0, 0, 0),
+  });
+  
+  page.drawText("WEBSITE", {
+    x: labelX,
+    y: footerY - 5,
+    size: 10,
+    font: fontBold,
+    color: rgb(0, 0, 0),
+  });
+  page.drawText("www.greenpactconsulting.com", {
+    x: valueX,
+    y: footerY - 5,
+    size: 10,
+    font: font,
+    color: rgb(0, 0, 0),
+  });
 
   const pdfBytes = await pdfDoc.save();
 
