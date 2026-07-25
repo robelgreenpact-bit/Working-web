@@ -143,8 +143,8 @@ export async function GET(
   drawField("Date:", dateStr);
   drawField("PR Number:", pr.pr_number);
   drawField("Requestor Name:", requester?.name || "Unknown");
-  drawField("Project Name /Class:", pr.project_class || "");
-  drawField("Activity Line (Purpose):", pr.activity_line || "");
+  drawField("Project Name:", pr.project_class || "");
+  drawField("Purpose:", pr.activity_line || "");
   y -= 15;
 
   // Vendor and priority boxes
