@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 export async function DELETE(
   request: Request,
@@ -16,8 +17,14 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Use service client for delete operations
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
   // Check if user owns this PR
-  const { data: pr } = await supabase
+  const { data: pr } = await serviceClient
     .from("payment_requests")
     .select("created_by, status")
     .eq("id", id)
@@ -32,28 +39,28 @@ export async function DELETE(
   }
 
   // Delete items first
-  await supabase
+  await serviceClient
     .from("payment_request_items")
     .delete()
     .eq("payment_request_id", id);
 
   // Delete attachments
-  const { data: attachments } = await supabase
+  const { data: attachments } = await serviceClient
     .from("payment_request_attachments")
     .select("file_url")
     .eq("payment_request_id", id);
 
   for (const attachment of attachments || []) {
-    await supabase.storage.from("attachments").remove([attachment.file_url]);
+    await serviceClient.storage.from("attachments").remove([attachment.file_url]);
   }
 
-  await supabase
+  await serviceClient
     .from("payment_request_attachments")
     .delete()
     .eq("payment_request_id", id);
 
   // Delete the PR
-  const { error } = await supabase
+  const { error } = await serviceClient
     .from("payment_requests")
     .delete()
     .eq("id", id);
@@ -80,6 +87,12 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Use service client for update operations
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
   const formData = await request.formData();
   const project_class = formData.get("project_class") as string;
   const activity_line = formData.get("activity_line") as string;
@@ -90,7 +103,7 @@ export async function PUT(
   const files = formData.getAll("files") as File[];
 
   // Check if user owns this PR
-  const { data: pr } = await supabase
+  const { data: pr } = await serviceClient
     .from("payment_requests")
     .select("created_by, status")
     .eq("id", id)
@@ -102,13 +115,6 @@ export async function PUT(
 
   if (pr.created_by !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  if (pr.status !== "pending_manager") {
-    return NextResponse.json(
-      { error: "Can only edit pending requests" },
-      { status: 400 },
-    );
   }
 
   if (!activity_line || !itemsJson) {
@@ -139,7 +145,7 @@ export async function PUT(
   );
 
   // Update the PR
-  const { error: updateError } = await supabase
+  const { error: updateError } = await serviceClient
     .from("payment_requests")
     .update({
       project_class: project_class || null,
@@ -156,7 +162,7 @@ export async function PUT(
   }
 
   // Delete existing items
-  await supabase
+  await serviceClient
     .from("payment_request_items")
     .delete()
     .eq("payment_request_id", id);
@@ -172,7 +178,7 @@ export async function PUT(
     total_price: it.qty * it.unit_price,
   }));
 
-  await supabase.from("payment_request_items").insert(itemRows);
+  await serviceClient.from("payment_request_items").insert(itemRows);
 
   // Handle new file attachments
   for (const file of files) {
@@ -181,13 +187,13 @@ export async function PUT(
     const filePath = `payment-requests/${id}/${Date.now()}-${file.name}`;
     const arrayBuffer = await file.arrayBuffer();
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await serviceClient.storage
       .from("attachments")
       .upload(filePath, arrayBuffer, { contentType: file.type });
 
     if (uploadError) continue;
 
-    await supabase.from("payment_request_attachments").insert({
+    await serviceClient.from("payment_request_attachments").insert({
       payment_request_id: id,
       file_url: filePath,
       uploaded_by: user.id,
