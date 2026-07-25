@@ -68,6 +68,7 @@ export async function POST(request: Request) {
   const activity_line = formData.get("activity_line") as string;
   const suggested_vendor = formData.get("suggested_vendor") as string;
   const supply_priority = formData.get("supply_priority") as string;
+  const required_date = formData.get("required_date") as string;
   const itemsJson = formData.get("items") as string;
   const files = formData.getAll("files") as File[];
 
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
       activity_line,
       suggested_vendor: suggested_vendor || null,
       supply_priority: supply_priority || "regular",
+      required_date: required_date || null,
       amount: totalAmount,
       created_by: user.id,
       status: "pending_manager",

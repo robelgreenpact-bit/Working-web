@@ -67,6 +67,7 @@ export default function FinancePaymentsPage() {
   const [activityLine, setActivityLine] = useState("");
   const [vendor, setVendor] = useState("");
   const [priority, setPriority] = useState("regular");
+  const [requiredDate, setRequiredDate] = useState("");
   const [items, setItems] = useState<LineItem[]>([emptyItem()]);
   const [files, setFiles] = useState<FileList | null>(null);
 
@@ -111,6 +112,7 @@ export default function FinancePaymentsPage() {
     formData.append("activity_line", activityLine);
     formData.append("suggested_vendor", vendor);
     formData.append("supply_priority", priority);
+    formData.append("required_date", requiredDate);
     formData.append("items", JSON.stringify(items));
 
     if (files) {
@@ -136,6 +138,7 @@ export default function FinancePaymentsPage() {
     setActivityLine("");
     setVendor("");
     setPriority("regular");
+    setRequiredDate("");
     setItems([emptyItem()]);
     setFiles(null);
     setShowForm(false);
@@ -232,6 +235,17 @@ export default function FinancePaymentsPage() {
                   <option value="urgent">Urgent</option>
                   <option value="regular">Regular</option>
                 </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-gray-600">
+                  Required By Date
+                </label>
+                <input
+                  type="date"
+                  value={requiredDate}
+                  onChange={(e) => setRequiredDate(e.target.value)}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                />
               </div>
             </div>
 
