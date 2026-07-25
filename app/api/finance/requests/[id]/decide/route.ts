@@ -73,27 +73,20 @@ export async function POST(
   const durableTypes = ["physical_good", "other_asset", "electronics"];
   if (decision === "approved" && durableTypes.includes(reqData.type)) {
     if (issueFromInventory && assetIds && assetIds.length > 0) {
-      // Issue multiple assets from inventory
-      const issuePromises = assetIds.map(async (assetId: string) => {
-        const { error: issueError } = await supabase
-          .from("assets")
-          .update({
-            borrowed_by: reqData.requester_id,
-            borrowed_at: new Date().toISOString(),
-          })
-          .eq("id", assetId)
-          .is("borrowed_by", null);
-        return issueError;
-      });
+      // Issue assets from inventory based on selection
+      const { error: issueError } = await supabase
+        .from("assets")
+        .update({
+          borrowed_by: reqData.requester_id,
+          borrowed_at: new Date().toISOString(),
+        })
+        .eq("id", assetIds[0])
+        .is("borrowed_by", null);
 
-      const errors = await Promise.all(issuePromises);
-      const failedCount = errors.filter(e => e).length;
-
-      if (failedCount > 0) {
+      if (issueError) {
         return NextResponse.json({
           success: true,
-          warning:
-            `Request approved but issuing ${failedCount} of ${assetIds.length} items from inventory failed.`,
+          warning: "Request approved but issuing from inventory failed: " + issueError.message,
         });
       }
     } else {

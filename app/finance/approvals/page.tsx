@@ -215,40 +215,42 @@ export default function FinancePage() {
                       Fulfill from Inventory (optional)
                       {(r.quantity || 0) > 1 && <span className="ml-2 text-amber-600">Quantity: {r.quantity}</span>}
                     </label>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {availableAssets
-                        .filter(a => a.category === (r.type === "electronics" ? "electronics" : a.category) || r.type !== "electronics")
-                        .map((a) => (
-                          <label key={a.id} className="flex items-center gap-2 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={(inventoryChoice[r.id] || []).includes(a.id)}
-                              onChange={(e) => {
-                                const current = inventoryChoice[r.id] || [];
-                                if (e.target.checked) {
-                                  if (current.length < (r.quantity || 1)) {
-                                    setInventoryChoice({
-                                      ...inventoryChoice,
-                                      [r.id]: [...current, a.id],
-                                    });
-                                  } else {
-                                    alert(`Can only select ${r.quantity || 1} items`);
-                                  }
-                                } else {
-                                  setInventoryChoice({
-                                    ...inventoryChoice,
-                                    [r.id]: current.filter((id: string) => id !== a.id),
-                                  });
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-gray-300 text-brand-deep focus:ring-brand-deep"
-                            />
-                            <span className="text-sm">
-                              {a.asset_tag} — {a.item_name} ({a.category}){a.serial_number ? ` — SN: ${a.serial_number}` : ""}
-                            </span>
-                          </label>
-                        ))}
-                    </div>
+                    <select
+                      value={inventoryChoice[r.id]?.[0] || ""}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        if (!selectedId) {
+                          setInventoryChoice({ ...inventoryChoice, [r.id]: [] });
+                          return;
+                        }
+                        setInventoryChoice({
+                          ...inventoryChoice,
+                          [r.id]: [selectedId],
+                        });
+                      }}
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
+                    >
+                      <option value="">— Buy new instead —</option>
+                      {(() => {
+                        // Group assets by item name
+                        const grouped = availableAssets.reduce((acc, a) => {
+                          const key = a.item_name || "Unknown";
+                          if (!acc[key]) acc[key] = [];
+                          acc[key].push(a);
+                          return acc;
+                        }, {} as Record<string, AvailableAsset[]>);
+
+                        return Object.entries(grouped).map(([itemName, assets]) => (
+                          <optgroup key={itemName} label={`${itemName} (${assets.length} available)`}>
+                            {assets.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.asset_tag} — {a.item_name} ({a.category}){a.serial_number ? ` — SN: ${a.serial_number}` : ""}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ));
+                      })()}
+                    </select>
                   </div>
                 )}
 
