@@ -520,14 +520,16 @@ export default function FinancePaymentsPage() {
                         </button>
                       </>
                     )}
-                    <button
-                      onClick={() =>
-                        (window.location.href = `/api/payment-requests/${r.id}/download`)
-                      }
-                      className="rounded bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300"
-                    >
-                      Download PR
-                    </button>
+                    {r.status === "pending_finance" && (
+                      <button
+                        onClick={() =>
+                          (window.location.href = `/api/payment-requests/${r.id}/download`)
+                        }
+                        className="rounded bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300"
+                      >
+                        Download PR
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
