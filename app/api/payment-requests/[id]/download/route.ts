@@ -128,16 +128,16 @@ export async function GET(
     page.drawText(label, {
       x: 50,
       y,
-      size: 12,
+      size: 11,
       font: fontBold,
     });
     page.drawText(value, {
-      x: 150,
+      x: 160,
       y,
-      size: 12,
+      size: 11,
       font: font,
     });
-    y -= 25;
+    y -= 30;
   };
 
   drawField("Date:", dateStr);
