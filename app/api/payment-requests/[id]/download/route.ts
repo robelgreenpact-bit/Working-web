@@ -314,22 +314,25 @@ export async function GET(
 
   // Footer at bottom of page with three-section layout
   const footerY = 70;
-  const footerStartX = 50;
-  const footerWidth = width - 100;
+  const footerStartX = 40;
+  const footerWidth = width - 80;
   
-  // Load and embed logo image
+  // Load and embed logo image from filesystem
   let logoImage;
   try {
-    const logoUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/logo.png`;
-    const logoResponse = await fetch(logoUrl);
-    const logoBuffer = await logoResponse.arrayBuffer();
-    logoImage = await pdfDoc.embedPng(logoBuffer);
+    const fs = require('fs');
+    const path = require('path');
+    const logoPath = path.join(process.cwd(), 'public', 'logo.png');
+    if (fs.existsSync(logoPath)) {
+      const logoBuffer = fs.readFileSync(logoPath);
+      logoImage = await pdfDoc.embedPng(logoBuffer);
+    }
   } catch (error) {
     console.error('Failed to load logo:', error);
   }
   
   // First vertical divider (after logo section)
-  const divider1X = footerStartX + 200;
+  const divider1X = footerStartX + 160;
   page.drawLine({
     start: { x: divider1X, y: footerY + 35 },
     end: { x: divider1X, y: footerY - 25 },
@@ -338,7 +341,7 @@ export async function GET(
   });
   
   // Second vertical divider (after address section)
-  const divider2X = footerStartX + 380;
+  const divider2X = footerStartX + 320;
   page.drawLine({
     start: { x: divider2X, y: footerY + 35 },
     end: { x: divider2X, y: footerY - 25 },
@@ -348,10 +351,10 @@ export async function GET(
   
   // Left Section - Logo image
   if (logoImage) {
-    const logoDims = logoImage.scale(0.15);
+    const logoDims = logoImage.scale(0.08);
     page.drawImage(logoImage, {
       x: footerStartX + 10,
-      y: footerY - 10,
+      y: footerY - 5,
       width: logoDims.width,
       height: logoDims.height,
     });
