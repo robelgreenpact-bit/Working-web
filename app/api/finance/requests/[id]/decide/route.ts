@@ -70,7 +70,7 @@ export async function POST(
   }
 
   // If approved AND it's a durable/physical item, either issue from inventory or create a new asset
-  const durableTypes = ["physical_good", "other_asset"];
+  const durableTypes = ["physical_good", "other_asset", "electronics"];
   if (decision === "approved" && durableTypes.includes(reqData.type)) {
     if (issueFromInventory && assetId) {
       const { error: issueError } = await supabase

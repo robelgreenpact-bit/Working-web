@@ -40,6 +40,7 @@ type AvailableAsset = {
   asset_tag: string;
   item_name: string | null;
   category: string;
+  serial_number: string | null;
 };
 
 function daysAgo(dateStr: string) {
@@ -208,7 +209,7 @@ export default function FinancePage() {
                   </div>
                 )}
 
-                {(r.type === "physical_good" || r.type === "other_asset") && (
+                {(r.type === "physical_good" || r.type === "other_asset" || r.type === "electronics") && (
                   <div className="mb-3">
                     <label className="mb-1 block text-xs font-medium text-gray-500">
                       Fulfill from Inventory (optional)
@@ -226,7 +227,7 @@ export default function FinancePage() {
                       <option value="">— Buy new instead —</option>
                       {availableAssets.map((a) => (
                         <option key={a.id} value={a.id}>
-                          {a.asset_tag} — {a.item_name} ({a.category})
+                          {a.asset_tag} — {a.item_name} ({a.category}){a.serial_number ? ` — SN: ${a.serial_number}` : ""}
                         </option>
                       ))}
                     </select>

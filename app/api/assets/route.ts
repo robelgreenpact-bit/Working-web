@@ -123,6 +123,7 @@ export async function POST(request: Request) {
   const {
     category,
     item_name,
+    serial_number,
     assigned_to,
     purchase_cost,
     purchase_date,
@@ -146,6 +147,7 @@ export async function POST(request: Request) {
       asset_tag: assetTag,
       category,
       item_name: item_name || null,
+      serial_number: serial_number || null,
       assigned_to: assigned_to || null,
       purchase_cost: purchase_cost || null,
       purchase_date: purchase_date || null,

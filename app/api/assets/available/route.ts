@@ -14,7 +14,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("assets")
-    .select("id, asset_tag, item_name, category, status")
+    .select("id, asset_tag, item_name, category, serial_number, status")
     .in("status", ["new", "in_use"])
     .is("borrowed_by", null)
     .order("category", { ascending: true });

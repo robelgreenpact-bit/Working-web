@@ -8,6 +8,7 @@ type Asset = {
   asset_tag: string;
   category: string;
   item_name: string | null;
+  serial_number: string | null;
   assigned_to: string | null;
   assignee_name: string | null;
   borrowed_by: string | null;
@@ -43,7 +44,9 @@ export default function AssetsPage() {
 
   const [form, setForm] = useState({
     category: "",
+    electronics_subcategory: "",
     item_name: "",
+    serial_number: "",
     assigned_to: "",
     purchase_cost: "",
     purchase_date: "",
@@ -76,7 +79,9 @@ export default function AssetsPage() {
   const resetForm = () => {
     setForm({
       category: "",
+      electronics_subcategory: "",
       item_name: "",
+      serial_number: "",
       assigned_to: "",
       purchase_cost: "",
       purchase_date: "",
@@ -124,7 +129,9 @@ export default function AssetsPage() {
   const handleEditClick = (asset: Asset) => {
     setForm({
       category: asset.category,
+      electronics_subcategory: "",
       item_name: asset.item_name || "",
+      serial_number: "",
       assigned_to: asset.assigned_to || "",
       purchase_cost: asset.purchase_cost ? String(asset.purchase_cost) : "",
       purchase_date: asset.purchase_date || "",
@@ -204,7 +211,7 @@ export default function AssetsPage() {
               <select
                 required
                 value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                onChange={(e) => setForm({ ...form, category: e.target.value, electronics_subcategory: "" })}
                 className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               >
                 <option value="">— Select category —</option>
@@ -215,6 +222,39 @@ export default function AssetsPage() {
                 <option value="other">Other</option>
               </select>
             </div>
+
+            {form.category === "electronics" && (
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Electronics Type
+                  </label>
+                  <select
+                    value={form.electronics_subcategory}
+                    onChange={(e) => setForm({ ...form, electronics_subcategory: e.target.value })}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
+                  >
+                    <option value="">— Select type —</option>
+                    <option value="tablet">Tablet</option>
+                    <option value="pc">PC</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Serial Number
+                  </label>
+                  <input
+                    type="text"
+                    value={form.serial_number}
+                    onChange={(e) => setForm({ ...form, serial_number: e.target.value })}
+                    placeholder="e.g. SN123456789"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
+                  />
+                </div>
+              </>
+            )}
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -385,6 +425,7 @@ export default function AssetsPage() {
                   <tr className="border-b border-gray-200 text-gray-600">
                     <th className="pb-3 font-semibold">Tag</th>
                     <th className="pb-3 font-semibold">Item</th>
+                    <th className="pb-3 font-semibold">Serial No</th>
                     <th className="pb-3 font-semibold">Assigned To</th>
                     <th className="pb-3 font-semibold">Borrowed By</th>
                     <th className="pb-3 font-semibold">Cost</th>
@@ -402,6 +443,9 @@ export default function AssetsPage() {
                         <span className="ml-2 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                           {(a.category || "other").replace("_", " ")}
                         </span>
+                      </td>
+                      <td className="py-3">
+                        <span className="font-mono text-xs text-gray-600">{a.serial_number || "—"}</span>
                       </td>
                       <td className="py-3">{a.assignee_name || "—"}</td>
                       <td className="py-3">

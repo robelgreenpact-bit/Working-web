@@ -13,6 +13,11 @@ const typeConfig: Record<
     needsCost: true,
     needsQuantity: true,
   },
+  electronics: {
+    label: "Electronics",
+    needsCost: true,
+    needsQuantity: true,
+  },
   travel_expense: {
     label: "Travel Expense",
     needsCost: true,
@@ -43,6 +48,7 @@ export default function NewRequestPage() {
     quantity: 1,
     estimated_cost: "",
     justification: "",
+    electronics_subcategory: "",
   });
   const [files, setFiles] = useState<FileList | null>(null);
   const [error, setError] = useState("");
@@ -115,7 +121,7 @@ export default function NewRequestPage() {
             </label>
             <select
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              onChange={(e) => setForm({ ...form, type: e.target.value, electronics_subcategory: "" })}
               className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
             >
               {Object.entries(typeConfig).map(([key, cfg]) => (
@@ -125,6 +131,24 @@ export default function NewRequestPage() {
               ))}
             </select>
           </div>
+
+          {form.type === "electronics" && (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm text-gray-600">
+                Electronics Type
+              </label>
+              <select
+                value={form.electronics_subcategory}
+                onChange={(e) => setForm({ ...form, electronics_subcategory: e.target.value })}
+                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+              >
+                <option value="">— Select type —</option>
+                <option value="tablet">Tablet</option>
+                <option value="pc">PC</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          )}
 
           <div className="mb-4">
             <label className="mb-1 block text-sm text-gray-600">Title</label>
