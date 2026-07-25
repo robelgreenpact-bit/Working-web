@@ -137,7 +137,7 @@ export async function GET(
       size: 12,
       font: font,
     });
-    y -= 20;
+    y -= 25;
   };
 
   drawField("Date:", dateStr);
@@ -145,7 +145,7 @@ export async function GET(
   drawField("Requestor Name:", requester?.name || "Unknown");
   drawField("Project Name /Class:", pr.project_class || "");
   drawField("Activity Line (Purpose):", pr.activity_line || "");
-  y -= 10;
+  y -= 15;
 
   // Vendor and priority boxes
   page.drawRectangle({
