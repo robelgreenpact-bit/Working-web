@@ -452,7 +452,7 @@ export default function FinancePaymentsPage() {
                       <p className="text-sm text-gray-500">
                         {r.activity_line}
                         {r.project_class && ` — ${r.project_class}`} —{" "}
-                        {new Date(r.created_at).toLocaleDateString()}
+                        {r.required_date ? new Date(r.required_date).toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}
                       </p>
                     </div>
                     <span
