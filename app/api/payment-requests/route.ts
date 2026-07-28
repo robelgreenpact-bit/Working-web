@@ -39,11 +39,24 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const { data: profile } = await supabase
+    .from("public_users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  let query = supabase
     .from("payment_requests")
-    .select("*, payment_request_attachments(*), payment_request_items(*)")
-    .eq("created_by", user.id)
-    .order("created_at", { ascending: false });
+    .select("*, payment_request_attachments(*), payment_request_items(*)");
+
+  // If finance user, also fetch manager-approved requests
+  if (profile?.role === "finance") {
+    query = query.or(`created_by.eq.${user.id},status.eq.pending_finance`);
+  } else {
+    query = query.eq("created_by", user.id);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

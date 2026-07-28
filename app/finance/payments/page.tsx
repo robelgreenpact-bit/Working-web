@@ -62,8 +62,6 @@ const emptyItem = (): LineItem => ({
 export default function FinancePaymentsPage() {
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [companyWide, setCompanyWide] = useState<PaymentRequest[]>([]);
-  const [companyWideLoading, setCompanyWideLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -85,17 +83,8 @@ export default function FinancePaymentsPage() {
     setLoading(false);
   };
 
-  const loadCompanyWide = async () => {
-    setCompanyWideLoading(true);
-    const res = await fetch("/api/finance/payment-requests");
-    const data = await res.json();
-    setCompanyWide(data.requests || []);
-    setCompanyWideLoading(false);
-  };
-
   useEffect(() => {
     loadRequests();
-    loadCompanyWide();
   }, []);
 
   const updateItem = (index: number, field: keyof LineItem, value: string) => {
@@ -182,7 +171,6 @@ export default function FinancePaymentsPage() {
       return;
     }
     loadRequests();
-    loadCompanyWide();
   };
 
   const handleDelete = async (id: string) => {
@@ -559,103 +547,6 @@ export default function FinancePaymentsPage() {
             </div>
           )}
         </div>
-        <h2 className="mb-4 mt-10 text-xl font-bold text-brand-deep">
-          Approved — Ready to Pay (Company-wide)
-        </h2>
-
-        {companyWideLoading ? (
-          <p className="text-gray-500">Loading...</p>
-        ) : companyWide.length === 0 ? (
-          <div className="rounded-lg border-t-4 border-brand bg-white p-6 text-gray-500 shadow">
-            Nothing waiting to be paid right now.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {companyWide.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border-l-4 border-brand bg-white p-6 shadow"
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      PR #{r.pr_number} — {r.activity_line}
-                    </h2>
-                    <p className="text-sm text-gray-500">
-                      From{" "}
-                      {(r as unknown as { creator_name?: string })
-                        .creator_name || "Unknown"}
-                      {r.project_class && ` — ${r.project_class}`}
-                    </p>
-                  </div>
-                  <span
-                    className={`rounded px-2 py-1 text-xs ${
-                      statusColors[r.status] || "bg-gray-100 text-gray-800"
-                    }`}
-                  >
-                    {statusLabels[r.status] || r.status}
-                  </span>
-                </div>
-
-                {r.suggested_vendor && (
-                  <p className="mb-2 text-sm text-gray-700">
-                    Suggested Vendor: {r.suggested_vendor}
-                  </p>
-                )}
-
-                <table className="mb-2 w-full text-left text-xs text-gray-700">
-                  <thead className="text-gray-400">
-                    <tr>
-                      <th className="pb-1">Item</th>
-                      <th className="pb-1">Description</th>
-                      <th className="pb-1">Unit</th>
-                      <th className="pb-1">Qty</th>
-                      <th className="pb-1">Unit Price</th>
-                      <th className="pb-1">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {r.payment_request_items.map((it) => (
-                      <tr key={it.id} className="border-t">
-                        <td className="py-1">{it.item_name}</td>
-                        <td className="py-1">{it.description || "—"}</td>
-                        <td className="py-1">{it.unit || "—"}</td>
-                        <td className="py-1">{it.qty}</td>
-                        <td className="py-1">{it.unit_price}</td>
-                        <td className="py-1">{it.total_price}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <p className="mb-3 text-right text-sm font-semibold text-gray-800">
-                  Total: {r.amount} ETB
-                </p>
-
-                <div className="mt-2 flex gap-2">
-                  {r.status === "pending_finance" && (
-                    <button
-                      onClick={() => handleMarkPaid(r.id)}
-                      className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
-                    >
-                      Mark as Paid
-                    </button>
-                  )}
-                  {(r.status === "pending_finance" || r.status === "paid") && (
-                    <button
-                      onClick={() =>
-                        (window.location.href = `/api/payment-requests/${r.id}/download`)
-                      }
-                      className="rounded bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300"
-                    >
-                      Download PR
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
