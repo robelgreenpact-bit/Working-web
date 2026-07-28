@@ -30,6 +30,7 @@ async function getNextPRNumber() {
 
 export async function GET() {
   const supabase = await createClient();
+  const serviceClient = getServiceClient();
 
   const {
     data: { user },
@@ -45,23 +46,27 @@ export async function GET() {
     .eq("id", user.id)
     .single();
 
-  let query = supabase
+  const { data, error } = await serviceClient
     .from("payment_requests")
-    .select("*, payment_request_attachments(*), payment_request_items(*)");
-
-  if (profile?.role === "finance") {
-    query = query.or(`created_by.eq.${user.id},status.eq.pending_finance`);
-  } else {
-    query = query.eq("created_by", user.id);
-  }
-
-  const { data, error } = await query.order("created_at", { ascending: false });
+    .select("*, payment_request_attachments(*), payment_request_items(*)")
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ requests: data });
+  const visibleRequests = (data || []).filter((request) => {
+    const isFinanceOrAdmin = profile?.role === "finance" || profile?.role === "admin";
+    const canSeeInFinanceQueue = ["pending_finance", "approved", "paid"].includes(request.status);
+
+    if (isFinanceOrAdmin) {
+      return request.created_by === user.id || canSeeInFinanceQueue;
+    }
+
+    return request.created_by === user.id;
+  });
+
+  return NextResponse.json({ requests: visibleRequests });
 }
 
 export async function POST(request: Request) {
