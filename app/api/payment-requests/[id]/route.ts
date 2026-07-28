@@ -45,11 +45,11 @@ export async function POST(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const isOwner = existing.created_by === user.id;
+    // Only finance role can mark as paid
     const isFinance = profile?.role === "finance";
 
-    if (!isOwner && !isFinance) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!isFinance) {
+      return NextResponse.json({ error: "Only finance can mark as paid" }, { status: 403 });
     }
 
     if (existing.status !== "pending_finance" && existing.status !== "approved") {
