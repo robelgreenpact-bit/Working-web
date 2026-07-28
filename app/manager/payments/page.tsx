@@ -79,16 +79,10 @@ export default function ManagerPaymentsPage() {
     <div>
       <Navbar title="Payment Approvals" />
       <div className="mx-auto max-w-4xl p-8">
-       <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-brand-deep">
             Purchase Request Approvals
           </h1>
-          
-           <a href="/manager/payments/new"
-            className="rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
-          >
-            + Submit My Own PR
-          </a>
         </div>
 
         {loading ? (
