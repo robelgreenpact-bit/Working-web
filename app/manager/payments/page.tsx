@@ -38,6 +38,12 @@ export default function ManagerPaymentsPage() {
   const [history, setHistory] = useState<HistoryPaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState<Record<string, string>>({});
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [activityLine, setActivityLine] = useState("");
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
 
   const loadAll = async () => {
     setLoading(true);
@@ -75,15 +81,107 @@ export default function ManagerPaymentsPage() {
     loadAll();
   };
 
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+
+    const res = await fetch("/api/manager/payment-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        activity_line: activityLine,
+        description,
+        amount: Number(amount),
+      }),
+    });
+
+    const data = await res.json();
+    setSubmitting(false);
+
+    if (!res.ok) {
+      setError(data.error || "Failed to submit payment request");
+      return;
+    }
+
+    setActivityLine("");
+    setAmount("");
+    setDescription("");
+    setShowForm(false);
+    loadAll();
+  };
+
   return (
     <div>
       <Navbar title="Payment Approvals" />
       <div className="mx-auto max-w-4xl p-8">
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-brand-deep">
             Purchase Request Approvals
           </h1>
+          <button
+            onClick={() => setShowForm((prev) => !prev)}
+            className="rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
+          >
+            {showForm ? "Cancel" : "+ Submit My Own PR"}
+          </button>
         </div>
+
+        {showForm && (
+          <form
+            onSubmit={handleCreate}
+            className="mb-6 rounded-lg border-l-4 border-brand bg-white p-6 shadow"
+          >
+            {error && (
+              <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-600">
+                {error}
+              </p>
+            )}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm text-gray-600">
+                  Purpose / Activity Line
+                </label>
+                <input
+                  required
+                  value={activityLine}
+                  onChange={(e) => setActivityLine(e.target.value)}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-gray-600">
+                  Amount (ETB)
+                </label>
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-gray-600">
+                  Description
+                </label>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-4 rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {submitting ? "Submitting..." : "Submit PR"}
+            </button>
+          </form>
+        )}
 
         {loading ? (
           <p className="text-gray-500">Loading...</p>
