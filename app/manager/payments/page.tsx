@@ -33,6 +33,22 @@ type HistoryPaymentRow = PaymentRequestRow & {
   decision_comment: string | null;
 };
 
+type LineItem = {
+  item_name: string;
+  description: string;
+  unit: string;
+  qty: number;
+  unit_price: number;
+};
+
+const emptyItem = (): LineItem => ({
+  item_name: "",
+  description: "",
+  unit: "",
+  qty: 1,
+  unit_price: 0,
+});
+
 export default function ManagerPaymentsPage() {
   const [pending, setPending] = useState<PaymentRequestRow[]>([]);
   const [history, setHistory] = useState<HistoryPaymentRow[]>([]);
@@ -41,9 +57,13 @@ export default function ManagerPaymentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [projectClass, setProjectClass] = useState("");
   const [activityLine, setActivityLine] = useState("");
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
+  const [vendor, setVendor] = useState("");
+  const [priority, setPriority] = useState("regular");
+  const [requiredDate, setRequiredDate] = useState("");
+  const [items, setItems] = useState<LineItem[]>([emptyItem()]);
+  const [files, setFiles] = useState<FileList | null>(null);
 
   const loadAll = async () => {
     setLoading(true);
@@ -81,19 +101,47 @@ export default function ManagerPaymentsPage() {
     loadAll();
   };
 
+  const updateItem = (index: number, field: keyof LineItem, value: string) => {
+    const updated = [...items];
+    if (field === "qty" || field === "unit_price") {
+      updated[index][field] = Number(value) as never;
+    } else {
+      updated[index][field] = value as never;
+    }
+    setItems(updated);
+  };
+
+  const addItemRow = () => setItems([...items, emptyItem()]);
+  const removeItemRow = (index: number) =>
+    setItems(items.filter((_, i) => i !== index));
+
+  const totalAmount = items.reduce(
+    (sum, it) => sum + it.qty * it.unit_price,
+    0,
+  );
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSubmitting(true);
 
+    const formData = new FormData();
+    formData.append("project_class", projectClass);
+    formData.append("activity_line", activityLine);
+    formData.append("suggested_vendor", vendor);
+    formData.append("supply_priority", priority);
+    formData.append("required_date", requiredDate);
+    formData.append("items", JSON.stringify(items));
+
+    if (files) {
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
+    }
+
     const res = await fetch("/api/manager/payment-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        activity_line: activityLine,
-        description,
-        amount: Number(amount),
-      }),
+      body: formData,
     });
 
     const data = await res.json();
@@ -104,9 +152,13 @@ export default function ManagerPaymentsPage() {
       return;
     }
 
+    setProjectClass("");
     setActivityLine("");
-    setAmount("");
-    setDescription("");
+    setVendor("");
+    setPriority("regular");
+    setRequiredDate("");
+    setItems([emptyItem()]);
+    setFiles(null);
     setShowForm(false);
     loadAll();
   };
@@ -123,60 +175,201 @@ export default function ManagerPaymentsPage() {
             onClick={() => setShowForm((prev) => !prev)}
             className="rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
           >
-            {showForm ? "Cancel" : "+ Submit My Own PR"}
+            {showForm ? "Cancel" : "+ New PR"}
           </button>
         </div>
 
         {showForm && (
           <form
             onSubmit={handleCreate}
-            className="mb-6 rounded-lg border-l-4 border-brand bg-white p-6 shadow"
+            className="mb-6 rounded-lg border-t-4 border-brand bg-white p-6 shadow"
           >
             {error && (
-              <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-600">
+              <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-600">
                 {error}
               </p>
             )}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
+
+            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
                 <label className="mb-1 block text-sm text-gray-600">
-                  Purpose / Activity Line
+                  Project Name / Class
                 </label>
                 <input
+                  type="text"
+                  value={projectClass}
+                  onChange={(e) => setProjectClass(e.target.value)}
+                  placeholder="e.g. Office_AA"
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-gray-600">
+                  Activity Line (Purpose)
+                </label>
+                <input
+                  type="text"
                   required
                   value={activityLine}
                   onChange={(e) => setActivityLine(e.target.value)}
+                  placeholder="e.g. perdiem"
                   className="w-full rounded border border-gray-300 p-2 text-gray-900"
                 />
               </div>
               <div>
                 <label className="mb-1 block text-sm text-gray-600">
-                  Amount (ETB)
+                  Suggested Vendor(s)
                 </label>
                 <input
-                  required
-                  type="number"
-                  min="1"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  type="text"
+                  value={vendor}
+                  onChange={(e) => setVendor(e.target.value)}
                   className="w-full rounded border border-gray-300 p-2 text-gray-900"
                 />
               </div>
               <div>
                 <label className="mb-1 block text-sm text-gray-600">
-                  Description
+                  Supply Priority
+                </label>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900"
+                >
+                  <option value="emergency">Emergency</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="regular">Regular</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-gray-600">
+                  Required By Date
                 </label>
                 <input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  type="date"
+                  value={requiredDate}
+                  onChange={(e) => setRequiredDate(e.target.value)}
                   className="w-full rounded border border-gray-300 p-2 text-gray-900"
                 />
               </div>
             </div>
+
+            <label className="mb-1 block text-sm text-gray-600">Items</label>
+            <div className="mb-3 overflow-x-auto rounded border border-gray-200">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-500">
+                  <tr>
+                    <th className="p-2">Item Name</th>
+                    <th className="p-2">Description</th>
+                    <th className="p-2">Unit</th>
+                    <th className="p-2">Qty</th>
+                    <th className="p-2">Unit Price</th>
+                    <th className="p-2">Total</th>
+                    <th className="p-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it, idx) => (
+                    <tr key={idx} className="border-t">
+                      <td className="p-1">
+                        <input
+                          type="text"
+                          required
+                          value={it.item_name}
+                          onChange={(e) =>
+                            updateItem(idx, "item_name", e.target.value)
+                          }
+                          className="w-full rounded border border-gray-300 p-1 text-gray-900"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <input
+                          type="text"
+                          value={it.description}
+                          onChange={(e) =>
+                            updateItem(idx, "description", e.target.value)
+                          }
+                          className="w-full rounded border border-gray-300 p-1 text-gray-900"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <input
+                          type="text"
+                          value={it.unit}
+                          onChange={(e) => updateItem(idx, "unit", e.target.value)}
+                          placeholder="e.g. number"
+                          className="w-20 rounded border border-gray-300 p-1 text-gray-900"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <input
+                          type="number"
+                          min={0}
+                          value={it.qty}
+                          onChange={(e) => updateItem(idx, "qty", e.target.value)}
+                          className="w-16 rounded border border-gray-300 p-1 text-gray-900"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <input
+                          type="number"
+                          min={0}
+                          value={it.unit_price}
+                          onChange={(e) =>
+                            updateItem(idx, "unit_price", e.target.value)
+                          }
+                          className="w-24 rounded border border-gray-300 p-1 text-gray-900"
+                        />
+                      </td>
+                      <td className="p-2 text-gray-700">
+                        {(it.qty * it.unit_price).toFixed(2)}
+                      </td>
+                      <td className="p-1">
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItemRow(idx)}
+                            className="text-xs text-red-600 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <button
+              type="button"
+              onClick={addItemRow}
+              className="mb-4 text-sm text-brand-deep hover:underline"
+            >
+              + Add Item
+            </button>
+
+            <p className="mb-4 text-right text-sm font-semibold text-gray-700">
+              Total: {totalAmount.toFixed(2)} ETB
+            </p>
+
+            <div className="mb-6">
+              <label className="mb-1 block text-sm text-gray-600">
+                Attachments (invoice, quote, etc.)
+              </label>
+              <input
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={(e) => setFiles(e.target.files)}
+                className="w-full rounded border border-gray-300 p-2 text-gray-900"
+              />
+            </div>
+
             <button
               type="submit"
               disabled={submitting}
-              className="mt-4 rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="rounded bg-brand-deep px-4 py-2 font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
             >
               {submitting ? "Submitting..." : "Submit PR"}
             </button>

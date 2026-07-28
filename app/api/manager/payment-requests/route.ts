@@ -87,18 +87,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const activityLine = body.activity_line?.trim() || body.title?.trim() || "Manager PR";
-  const description = body.description?.trim() || null;
-  const amount = Number(body.amount || 0);
-  const projectClass = body.project_class?.trim() || null;
-  const suggestedVendor = body.suggested_vendor?.trim() || null;
-  const supplyPriority = body.supply_priority?.trim() || "regular";
-  const requiredDate = body.required_date?.trim() || null;
+  const formData = await request.formData();
+  const projectClass = (formData.get("project_class") as string | null)?.trim() || null;
+  const activityLine = (formData.get("activity_line") as string | null)?.trim() || "Manager PR";
+  const suggestedVendor = (formData.get("suggested_vendor") as string | null)?.trim() || null;
+  const supplyPriority = (formData.get("supply_priority") as string | null)?.trim() || "regular";
+  const requiredDate = (formData.get("required_date") as string | null)?.trim() || null;
+  const itemsJson = formData.get("items") as string | null;
+  const files = formData.getAll("files") as File[];
 
-  if (!amount || amount <= 0) {
-    return NextResponse.json({ error: "Amount is required" }, { status: 400 });
+  if (!activityLine || !itemsJson) {
+    return NextResponse.json({ error: "Activity line and items are required" }, { status: 400 });
   }
+
+  const items = JSON.parse(itemsJson) as {
+    item_name: string;
+    description: string;
+    unit: string;
+    qty: number;
+    unit_price: number;
+  }[];
+
+  if (items.length === 0) {
+    return NextResponse.json({ error: "At least one item is required" }, { status: 400 });
+  }
+
+  const totalAmount = items.reduce(
+    (sum, it) => sum + it.qty * it.unit_price,
+    0,
+  );
 
   const prNumber = await getNextPRNumber(serviceClient);
 
@@ -112,11 +129,11 @@ export async function POST(request: Request) {
       suggested_vendor: suggestedVendor,
       supply_priority: supplyPriority,
       required_date: requiredDate,
-      amount,
+      amount: totalAmount,
       created_by: user.id,
-      status: "pending_finance",
+      status: "pending_manager",
       decided_by: user.id,
-      decision_comment: "Self-approved by manager",
+      decision_comment: "Submitted by manager",
     })
     .select()
     .single();
@@ -125,15 +142,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await serviceClient.from("payment_request_items").insert({
+  const itemRows = items.map((it) => ({
     payment_request_id: newRequest.id,
-    item_name: activityLine,
-    description,
-    unit: null,
-    qty: 1,
-    unit_price: amount,
-    total_price: amount,
-  });
+    item_name: it.item_name,
+    description: it.description || null,
+    unit: it.unit || null,
+    qty: it.qty,
+    unit_price: it.unit_price,
+    total_price: it.qty * it.unit_price,
+  }));
+
+  await serviceClient.from("payment_request_items").insert(itemRows);
+
+  for (const file of files) {
+    if (!file || file.size === 0) continue;
+
+    const filePath = `payment-requests/${newRequest.id}/${Date.now()}-${file.name}`;
+    const arrayBuffer = await file.arrayBuffer();
+
+    const { error: uploadError } = await serviceClient.storage
+      .from("attachments")
+      .upload(filePath, arrayBuffer, { contentType: file.type });
+
+    if (uploadError) continue;
+
+    await serviceClient.from("payment_request_attachments").insert({
+      payment_request_id: newRequest.id,
+      file_url: filePath,
+      uploaded_by: user.id,
+    });
+  }
 
   return NextResponse.json({ request: newRequest });
 }
