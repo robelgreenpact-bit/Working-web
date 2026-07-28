@@ -15,28 +15,24 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
   const { data: profile } = await supabase
     .from("public_users")
     .select("role")
     .eq("id", user.id)
     .single();
 
+  if (!profile || !["finance", "admin"].includes(profile.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { data: existing } = await supabase
     .from("payment_requests")
-    .select("status, created_by")
+    .select("status")
     .eq("id", id)
     .single();
 
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const isOwner = existing.created_by === user.id;
-  const isFinance = profile?.role === "finance";
-
-  if (!isOwner && !isFinance) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (existing.status !== "pending_finance" && existing.status !== "approved") {
