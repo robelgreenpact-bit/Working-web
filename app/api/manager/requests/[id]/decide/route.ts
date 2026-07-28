@@ -88,9 +88,10 @@ export async function POST(
         .eq("id", id)
         .single();
 
+      const serviceClient = getServiceClient();
       const prNumber = await getNextPRNumber();
 
-      const { data: newRequest, error: insertErr } = await supabase
+      const { data: newRequest, error: insertErr } = await serviceClient
         .from("payment_requests")
         .insert({
           pr_number: prNumber,
@@ -111,7 +112,7 @@ export async function POST(
         // create one payment_request_item reflecting the request
         const qty = reqFull.quantity || 1;
         const unitPrice = reqFull.estimated_cost || 0;
-        await supabase.from("payment_request_items").insert({
+        await serviceClient.from("payment_request_items").insert({
           payment_request_id: newRequest.id,
           item_name: reqFull.title,
           description: reqFull.description || null,
@@ -122,7 +123,7 @@ export async function POST(
         });
 
         // copy attachments if any
-        const { data: attachments } = await supabase
+        const { data: attachments } = await serviceClient
           .from("attachments")
           .select("*")
           .eq("request_id", id);
@@ -134,8 +135,10 @@ export async function POST(
             uploaded_by: reqFull.requester_id,
           }));
 
-          await supabase.from("payment_request_attachments").insert(attachRows);
+          await serviceClient.from("payment_request_attachments").insert(attachRows);
         }
+      } else if (insertErr) {
+        console.error("Failed to insert synced payment_request:", insertErr.message);
       }
     } catch (err) {
       // don't block approval flow on sync errors

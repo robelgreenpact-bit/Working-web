@@ -45,46 +45,48 @@ export async function GET() {
     .eq("id", user.id)
     .single();
 
-  let query = supabase
-    .from("payment_requests")
-    .select("*, payment_request_attachments(*), payment_request_items(*)");
-
-  // If finance user, fetch their own requests, manager-approved requests, and all manager-created requests
   if (profile?.role === "finance") {
-    query = query.or(`created_by.eq.${user.id},status.eq.pending_finance`);
-  } else {
-    query = query.eq("created_by", user.id);
+    const { data: pendingFinanceRequests, error: pendingError } = await supabase
+      .from("payment_requests")
+      .select("*, payment_request_attachments(*), payment_request_items(*)")
+      .in("status", ["pending_finance", "approved", "paid"])
+      .neq("created_by", user.id)
+      .order("created_at", { ascending: false });
+
+    if (pendingError) {
+      return NextResponse.json({ error: pendingError.message }, { status: 500 });
+    }
+
+    const { data: ownRequests, error: ownError } = await supabase
+      .from("payment_requests")
+      .select("*, payment_request_attachments(*), payment_request_items(*)")
+      .eq("created_by", user.id)
+      .order("created_at", { ascending: false });
+
+    if (ownError) {
+      return NextResponse.json({ error: ownError.message }, { status: 500 });
+    }
+
+    const combined = [
+      ...(pendingFinanceRequests || []),
+      ...(ownRequests || []),
+    ];
+
+    const uniqueRequests = combined.filter((request, index, self) =>
+      index === self.findIndex((r) => r.id === request.id),
+    );
+
+    return NextResponse.json({ requests: uniqueRequests });
   }
 
-  const { data, error } = await query.order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("payment_requests")
+    .select("*, payment_request_attachments(*), payment_request_items(*)")
+    .eq("created_by", user.id)
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // If finance user, also fetch manager-created requests
-  if (profile?.role === "finance") {
-    const { data: managers } = await supabase
-      .from("public_users")
-      .select("id")
-      .eq("role", "manager");
-
-    const managerIds = managers?.map(m => m.id) || [];
-    
-    if (managerIds.length > 0) {
-      const { data: managerRequests } = await supabase
-        .from("payment_requests")
-        .select("*, payment_request_attachments(*), payment_request_items(*)")
-        .in("created_by", managerIds);
-
-      // Merge and deduplicate
-      const allRequests = [...(data || []), ...(managerRequests || [])];
-      const uniqueRequests = allRequests.filter((request, index, self) =>
-        index === self.findIndex((r) => r.id === request.id)
-      );
-      
-      return NextResponse.json({ requests: uniqueRequests });
-    }
   }
 
   return NextResponse.json({ requests: data });
