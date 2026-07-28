@@ -559,48 +559,6 @@ export default function FinancePaymentsPage() {
             </div>
           )}
         </div>
-        <h2 className="mb-4 mt-10 text-xl font-bold text-brand-deep">
-          Approved — Ready to Pay (Company-wide)
-        </h2>
-
-        {companyWideLoading ? (
-          <p className="text-gray-500">Loading...</p>
-        ) : companyWide.length === 0 ? (
-          <div className="rounded-lg border-t-4 border-brand bg-white p-6 text-gray-500 shadow">
-            Nothing waiting to be paid right now.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {companyWide.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border-t-4 border-brand bg-white p-4 shadow"
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <p className="font-medium">
-                      PR #{r.pr_number} — {r.activity_line}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      From{" "}
-                      {(r as unknown as { creator_name?: string })
-                        .creator_name || "Unknown"}
-                    </p>
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">
-                    {r.amount} ETB
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleMarkPaid(r.id)}
-                  className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
-                >
-                  Mark as Paid
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

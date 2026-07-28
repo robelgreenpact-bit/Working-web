@@ -35,7 +35,7 @@ export async function GET() {
   const { data, error } = await serviceClient
     .from("payment_requests")
     .select("*, payment_request_items(*)")
-   .in("status", ["pending_finance", "approved"])
+   .in("status", ["pending_finance", "approved", "paid"])
     .order("updated_at", { ascending: true });
 
   if (error) {
