@@ -26,7 +26,7 @@ export async function GET() {
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "finance") {
+  if (!profile || (profile.role !== "finance" && profile.role !== "manager")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -35,7 +35,8 @@ export async function GET() {
   const { data, error } = await serviceClient
     .from("payment_requests")
     .select("*, payment_request_items(*)")
-   .in("status", ["pending_finance", "approved", "paid"])
+    .in("status", ["pending_finance", "approved", "paid"])
+    .neq("created_by", user.id)
     .order("updated_at", { ascending: true });
 
   if (error) {
