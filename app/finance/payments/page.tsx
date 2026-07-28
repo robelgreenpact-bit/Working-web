@@ -37,6 +37,7 @@ type PaymentRequest = {
 
 const statusLabels: Record<string, string> = {
   pending_manager: "Pending Manager Approval",
+  pending_finance: "Approved — Ready to Pay",
   approved: "Approved — Ready to Pay",
   rejected: "Rejected",
   paid: "Paid",
@@ -44,6 +45,7 @@ const statusLabels: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   pending_manager: "bg-amber-100 text-amber-800",
+  pending_finance: "bg-blue-100 text-blue-800",
   approved: "bg-blue-100 text-blue-800",
   rejected: "bg-red-100 text-red-800",
   paid: "bg-green-100 text-green-800",
