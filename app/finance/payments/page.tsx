@@ -62,8 +62,6 @@ const emptyItem = (): LineItem => ({
 export default function FinancePaymentsPage() {
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [companyWide, setCompanyWide] = useState<PaymentRequest[]>([]);
-  const [companyWideLoading, setCompanyWideLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -85,17 +83,8 @@ export default function FinancePaymentsPage() {
     setLoading(false);
   };
 
-  const loadCompanyWide = async () => {
-    setCompanyWideLoading(true);
-    const res = await fetch("/api/finance/payment-requests");
-    const data = await res.json();
-    setCompanyWide(data.requests || []);
-    setCompanyWideLoading(false);
-  };
-
   useEffect(() => {
     loadRequests();
-    loadCompanyWide();
   }, []);
 
   const updateItem = (index: number, field: keyof LineItem, value: string) => {
@@ -182,7 +171,6 @@ export default function FinancePaymentsPage() {
       return;
     }
     loadRequests();
-    loadCompanyWide();
   };
 
   const handleDelete = async (id: string) => {
