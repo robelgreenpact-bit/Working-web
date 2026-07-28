@@ -2,6 +2,78 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const { action } = body;
+
+  // Handle mark as paid action
+  if (action === "mark_paid") {
+    const { data: profile } = await supabase
+      .from("public_users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const { data: existing } = await supabase
+      .from("payment_requests")
+      .select("status, created_by")
+      .eq("id", id)
+      .single();
+
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const isOwner = existing.created_by === user.id;
+    const isFinance = profile?.role === "finance";
+
+    if (!isOwner && !isFinance) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (existing.status !== "pending_finance" && existing.status !== "approved") {
+      return NextResponse.json(
+        { error: "Only manager-approved requests can be marked as paid" },
+        { status: 400 },
+      );
+    }
+
+    const { error } = await supabase
+      .from("payment_requests")
+      .update({ status: "paid" })
+      .eq("id", id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  }
+
+  return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },

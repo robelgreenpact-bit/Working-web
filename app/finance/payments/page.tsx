@@ -171,8 +171,10 @@ export default function FinancePaymentsPage() {
 
   const handleMarkPaid = async (id: string) => {
     if (!confirm("Confirm this payment has been made?")) return;
-    const res = await fetch(`/api/payment-requests/${id}/markPaid`, {
+    const res = await fetch(`/api/payment-requests/${id}`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mark_paid" }),
     });
     const data = await res.json();
     if (!res.ok) {
