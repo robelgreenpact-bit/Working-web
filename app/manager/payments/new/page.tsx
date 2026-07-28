@@ -60,8 +60,6 @@ const emptyItem = (): LineItem => ({
 export default function FinancePaymentsPage() {
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [companyWide, setCompanyWide] = useState<PaymentRequest[]>([]);
-  const [companyWideLoading, setCompanyWideLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -83,17 +81,8 @@ export default function FinancePaymentsPage() {
     setLoading(false);
   };
 
-  const loadCompanyWide = async () => {
-    setCompanyWideLoading(true);
-    const res = await fetch("/api/finance/payment-requests");
-    const data = await res.json();
-    setCompanyWide(data.requests || []);
-    setCompanyWideLoading(false);
-  };
-
   useEffect(() => {
     loadRequests();
-    loadCompanyWide();
   }, []);
 
   const updateItem = (index: number, field: keyof LineItem, value: string) => {
@@ -178,7 +167,6 @@ export default function FinancePaymentsPage() {
       return;
     }
     loadRequests();
-    loadCompanyWide();
   };
 
   const handleDelete = async (id: string) => {
@@ -228,12 +216,19 @@ export default function FinancePaymentsPage() {
 
   return (
     <div>
-      <Navbar title="Payment Requests" />
+     <Navbar title="My Payment Requests" />
       <div className="mx-auto max-w-4xl p-8">
-        <div className="mb-6 flex items-center justify-between">
+       <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-brand-deep">
-            Purchase Request Authorization
+            Purchase Request Approvals
           </h1>
+          
+           <a href="/manager/payments/new"
+            className="rounded-full bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark"
+          >
+            + Submit My Own PR
+          </a>
+        </div>
           <button
             onClick={() => {
               if (editingId) {
@@ -555,49 +550,7 @@ export default function FinancePaymentsPage() {
             </div>
           )}
         </div>
-        <h2 className="mb-4 mt-10 text-xl font-bold text-brand-deep">
-          Approved — Ready to Pay (Company-wide)
-        </h2>
-
-        {companyWideLoading ? (
-          <p className="text-gray-500">Loading...</p>
-        ) : companyWide.length === 0 ? (
-          <div className="rounded-lg border-t-4 border-brand bg-white p-6 text-gray-500 shadow">
-            Nothing waiting to be paid right now.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {companyWide.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border-t-4 border-brand bg-white p-4 shadow"
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <p className="font-medium">
-                      PR #{r.pr_number} — {r.activity_line}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      From{" "}
-                      {(r as unknown as { creator_name?: string })
-                        .creator_name || "Unknown"}
-                    </p>
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">
-                    {r.amount} ETB
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleMarkPaid(r.id)}
-                  className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
-                >
-                  Mark as Paid
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
-    </div>
+    
   );
 }

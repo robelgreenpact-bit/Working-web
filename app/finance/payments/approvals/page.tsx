@@ -75,7 +75,6 @@ export default function FinancePage() {
     setRequests(data.requests || []);
     setLoading(false);
   };
-
   const loadHistory = async () => {
     setHistoryLoading(true);
     const res = await fetch("/api/finance/history");
