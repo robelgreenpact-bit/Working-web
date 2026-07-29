@@ -102,7 +102,7 @@ export default function LeavePage() {
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-wide text-brand-deep">
-                    Monthly report
+                    Yearly report
                   </p>
                   <p className="text-lg font-semibold text-gray-900">{monthlySummary.month}</p>
                 </div>
