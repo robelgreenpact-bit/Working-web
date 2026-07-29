@@ -14,6 +14,13 @@ type LeaveRequest = {
   created_at: string;
 };
 
+type MonthlySummary = {
+  month: string;
+  approved_days: number;
+  pending_days: number;
+  total_days: number;
+};
+
 const statusLabels: Record<string, string> = {
   pending: "Pending",
   approved: "Approved",
@@ -37,6 +44,7 @@ function formatDate(dateValue: string) {
 
 export default function LeavePage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [monthlySummary, setMonthlySummary] = useState<MonthlySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -52,6 +60,7 @@ export default function LeavePage() {
     const res = await fetch("/api/leaves");
     const data = await res.json();
     setRequests(data.requests || []);
+    setMonthlySummary(data.monthly_summary || null);
     setLoading(false);
   };
 
@@ -88,6 +97,33 @@ export default function LeavePage() {
       <Navbar title="Leave Requests" />
       <div className="mx-auto max-w-5xl p-8">
         <div className="mb-6 rounded-lg border-t-4 border-brand bg-white p-6 shadow">
+          {monthlySummary ? (
+            <div className="mb-5 rounded-lg border border-brand/20 bg-brand/5 p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-brand-deep">
+                    Monthly report
+                  </p>
+                  <p className="text-lg font-semibold text-gray-900">{monthlySummary.month}</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded bg-white px-3 py-2 shadow-sm">
+                    <p className="text-xs text-gray-500">Approved</p>
+                    <p className="text-lg font-semibold text-green-700">{monthlySummary.approved_days} days</p>
+                  </div>
+                  <div className="rounded bg-white px-3 py-2 shadow-sm">
+                    <p className="text-xs text-gray-500">Pending</p>
+                    <p className="text-lg font-semibold text-amber-700">{monthlySummary.pending_days} days</p>
+                  </div>
+                  <div className="rounded bg-white px-3 py-2 shadow-sm">
+                    <p className="text-xs text-gray-500">Total</p>
+                    <p className="text-lg font-semibold text-brand-deep">{monthlySummary.total_days} days</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-brand-deep">Leave Requests</h1>

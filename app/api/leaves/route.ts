@@ -11,6 +11,31 @@ function calculateDays(startDate: string, endDate: string) {
   return diffInDays + 1;
 }
 
+function calculateDaysInMonth(startDate: string, endDate: string) {
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+  monthEnd.setHours(23, 59, 59, 999);
+
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+
+  const overlapStart = start > monthStart ? start : monthStart;
+  const overlapEnd = end < monthEnd ? end : monthEnd;
+
+  if (overlapEnd < overlapStart) {
+    return 0;
+  }
+
+  const diffInDays = Math.round(
+    (overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  return diffInDays + 1;
+}
+
 export async function GET() {
   const supabase = await createClient();
 
@@ -32,7 +57,36 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ requests: data });
+  const requests = data || [];
+  const now = new Date();
+  const monthLabel = now.toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const approvedDays = requests.reduce((sum: number, request: { status: string; start_date: string; end_date: string }) => {
+    if (request.status !== "approved") {
+      return sum;
+    }
+    return sum + calculateDaysInMonth(request.start_date, request.end_date);
+  }, 0);
+
+  const pendingDays = requests.reduce((sum: number, request: { status: string; start_date: string; end_date: string }) => {
+    if (request.status !== "pending") {
+      return sum;
+    }
+    return sum + calculateDaysInMonth(request.start_date, request.end_date);
+  }, 0);
+
+  return NextResponse.json({
+    requests,
+    monthly_summary: {
+      month: monthLabel,
+      approved_days: approvedDays,
+      pending_days: pendingDays,
+      total_days: approvedDays + pendingDays,
+    },
+  });
 }
 
 export async function POST(request: Request) {
