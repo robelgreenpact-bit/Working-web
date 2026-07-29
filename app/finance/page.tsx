@@ -64,6 +64,8 @@ export default function FinancePaymentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [taxRegistryChoice, setTaxRegistryChoice] = useState<Record<string, boolean>>({});
 
   const [projectClass, setProjectClass] = useState("");
   const [activityLine, setActivityLine] = useState("");
@@ -181,6 +183,32 @@ export default function FinancePaymentsPage() {
       alert(data.error || "Failed to delete");
       return;
     }
+    loadRequests();
+  };
+
+  const handleFinanceDecision = async (
+    id: string,
+    decision: "approved" | "rejected",
+  ) => {
+    setProcessingId(id);
+
+    const res = await fetch(`/api/finance/payment-requests/${id}/decide`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision,
+        forTaxRegistry: taxRegistryChoice[id] || false,
+      }),
+    });
+
+    const data = await res.json();
+    setProcessingId(null);
+
+    if (!res.ok) {
+      alert(data.error || "Failed to submit finance decision");
+      return;
+    }
+
     loadRequests();
   };
 
@@ -503,15 +531,48 @@ export default function FinancePaymentsPage() {
                     </p>
                   )}
 
+                  {r.status === "pending_finance" && (
+                    <div className="mt-3 space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`tax-registry-${r.id}`}
+                          checked={taxRegistryChoice[r.id] || false}
+                          onChange={(e) =>
+                            setTaxRegistryChoice({
+                              ...taxRegistryChoice,
+                              [r.id]: e.target.checked,
+                            })
+                          }
+                          className="h-4 w-4 rounded border-gray-300 text-brand-deep focus:ring-brand-deep"
+                        />
+                        <label
+                          htmlFor={`tax-registry-${r.id}`}
+                          className="text-sm font-medium text-gray-700"
+                        >
+                          Send to Tax Registry
+                        </label>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleFinanceDecision(r.id, "approved")}
+                          disabled={processingId === r.id}
+                          className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
+                        >
+                          {processingId === r.id ? "Processing..." : "Approve"}
+                        </button>
+                        <button
+                          onClick={() => handleFinanceDecision(r.id, "rejected")}
+                          disabled={processingId === r.id}
+                          className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-2 flex gap-2">
-                    {r.status === "pending_finance" && (
-                      <button
-                        onClick={() => handleMarkPaid(r.id)}
-                        className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
-                      >
-                        Mark as Paid
-                      </button>
-                    )}
                     {r.status === "pending_manager" && (
                       <>
                         <button
