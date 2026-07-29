@@ -36,6 +36,26 @@ function calculateDaysInMonth(startDate: string, endDate: string) {
   return diffInDays + 1;
 }
 
+function calculateDaysInYear(startDate: string, endDate: string, year: number) {
+  const yearStart = new Date(`${year}-01-01T00:00:00`);
+  const yearEnd = new Date(`${year}-12-31T00:00:00`);
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+
+  const overlapStart = start > yearStart ? start : yearStart;
+  const overlapEnd = end < yearEnd ? end : yearEnd;
+
+  if (overlapEnd < overlapStart) {
+    return 0;
+  }
+
+  const diffInDays = Math.round(
+    (overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  return diffInDays + 1;
+}
+
 export async function GET() {
   const supabase = await createClient();
 
@@ -131,6 +151,39 @@ export async function POST(request: Request) {
   }
 
   const daysCount = calculateDays(startDate, endDate);
+
+  if (daysCount > 30) {
+    return NextResponse.json(
+      { error: "Leave requests cannot exceed 30 days in a year" },
+      { status: 400 },
+    );
+  }
+
+  const requestYear = new Date(`${startDate}T00:00:00`).getFullYear();
+  const { data: existingRequests, error: existingError } = await supabase
+    .from("leave_requests")
+    .select("start_date, end_date, status")
+    .eq("requester_id", user.id)
+    .in("status", ["approved", "pending"]);
+
+  if (existingError) {
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  }
+
+  const usedDaysInYear = (existingRequests || []).reduce((sum: number, request: { start_date: string; end_date: string; status: string }) => {
+    if (request.status === "rejected") {
+      return sum;
+    }
+
+    return sum + calculateDaysInYear(request.start_date, request.end_date, requestYear);
+  }, 0);
+
+  if (usedDaysInYear + daysCount > 30) {
+    return NextResponse.json(
+      { error: "You can only have up to 30 leave days in a year" },
+      { status: 400 },
+    );
+  }
 
   const { data: newRequest, error } = await supabase
     .from("leave_requests")

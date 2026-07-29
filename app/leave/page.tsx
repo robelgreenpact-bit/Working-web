@@ -128,7 +128,7 @@ export default function LeavePage() {
             <div>
               <h1 className="text-2xl font-bold text-brand-deep">Leave Requests</h1>
               <p className="text-sm text-gray-600">
-                Request time off and track how many days are being recorded.
+                Request time off and track how many days are being recorded. The yearly limit is 30 days.
               </p>
             </div>
           </div>

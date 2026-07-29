@@ -3,7 +3,7 @@ create table if not exists leave_requests (
   requester_id uuid not null references public_users(id) on delete cascade,
   start_date date not null,
   end_date date not null,
-  days_count integer not null check (days_count > 0),
+  days_count integer not null check (days_count > 0 and days_count <= 30),
   reason text not null,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   manager_comment text,
