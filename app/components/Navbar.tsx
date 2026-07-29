@@ -96,6 +96,7 @@ export default function Navbar({ title }: { title: string }) {
   const canSeeTaxRegistry =
     role === "admin" || role === "manager" || role === "finance";
   const canSeeRegisterQueue = role === "accountant";
+  const canSeeLeave = role !== "manager";
 
   const isActive = (path: string) => pathname === path;
   const closeMenu = () => setMenuOpen(false);
@@ -184,6 +185,12 @@ export default function Navbar({ title }: { title: string }) {
         </NavLink>
       ) : null}
 
+      {canSeeLeave ? (
+        <NavLink href="/leave" active={isActive("/leave")} onClick={closeMenu}>
+          Leave
+        </NavLink>
+      ) : null}
+
       {role === "admin" ? (
         <>
           <NavLink
@@ -221,6 +228,13 @@ export default function Navbar({ title }: { title: string }) {
           >
             Payment Approvals
             <Badge count={badges.payments || 0} />
+          </NavLink>
+          <NavLink
+            href="/manager/leaves"
+            active={isActive("/manager/leaves")}
+            onClick={closeMenu}
+          >
+            Leave Approvals
           </NavLink>
         </>
       ) : null}
