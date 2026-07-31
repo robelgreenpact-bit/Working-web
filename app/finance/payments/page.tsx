@@ -165,7 +165,6 @@ export default function FinancePaymentsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         decision: "approved",
-        forTaxRegistry: false,
       }),
     });
     const data = await res.json();

@@ -26,17 +26,13 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { decision, comment, forTaxRegistry } = await request.json();
+  const { decision, comment } = await request.json();
 
   if (!decision || !["approved", "rejected"].includes(decision)) {
     return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
   }
 
-  const nextStatus = decision === "approved"
-    ? forTaxRegistry
-      ? "paid"
-      : "approved"
-    : "rejected";
+  const nextStatus = decision === "approved" ? "paid" : "rejected";
 
   const { error } = await supabase
     .from("payment_requests")
@@ -44,7 +40,6 @@ export async function POST(
       status: nextStatus,
       decided_by: user.id,
       decision_comment: comment || null,
-      for_tax_registry: decision === "approved" ? Boolean(forTaxRegistry) : false,
     })
     .eq("id", id);
 
