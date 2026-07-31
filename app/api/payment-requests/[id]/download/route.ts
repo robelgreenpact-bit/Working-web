@@ -242,7 +242,7 @@ export async function GET(
     borderWidth: 1,
   });
 
-  page.drawText("SUGGESTED VENDOR(S):", {
+  page.drawText("RECEIVER:", {
     x: 55,
     y: y - 10,
     size: 10,
