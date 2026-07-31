@@ -49,13 +49,11 @@ export async function GET(
     .single();
 
   const items = pr.payment_request_items || [];
-  const subtotal = items.reduce(
+  const total = items.reduce(
     (sum: number, it: { qty: number; unit_price: number }) =>
       sum + it.qty * it.unit_price,
     0,
   );
-  const vat = subtotal * 0.15;
-  const total = subtotal + vat;
 
   const dateStr = pr.required_date
     ? new Date(pr.required_date).toLocaleDateString("en-US", {
@@ -260,14 +258,6 @@ export async function GET(
 
   // Totals
   const totalsX = width - 150;
-  page.drawText("Subtotal:", { x: totalsX, y, size: 12, font: fontBold });
-  page.drawText(subtotal.toFixed(2), { x: totalsX + 60, y, size: 12, font: font });
-  y -= 15;
-
-  page.drawText("VAT(15%):", { x: totalsX, y, size: 12, font: fontBold });
-  page.drawText(vat.toFixed(2), { x: totalsX + 60, y, size: 12, font: font });
-  y -= 15;
-
   page.drawText("Total:", { x: totalsX, y, size: 12, font: fontBold, color: rgb(0.75, 0, 0) });
   page.drawText(total.toFixed(2), { x: totalsX + 60, y, size: 12, font: fontBold, color: rgb(0.75, 0, 0) });
   y -= 30;
