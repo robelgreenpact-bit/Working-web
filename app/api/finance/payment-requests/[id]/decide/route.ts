@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
 
 export async function POST(
   request: Request,
@@ -34,7 +42,9 @@ export async function POST(
 
   const nextStatus = decision === "approved" ? "paid" : "rejected";
 
-  const { error } = await supabase
+  const serviceClient = getServiceClient();
+
+  const { error } = await serviceClient
     .from("payment_requests")
     .update({
       status: nextStatus,
