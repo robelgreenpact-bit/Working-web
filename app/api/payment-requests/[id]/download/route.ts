@@ -162,7 +162,7 @@ export async function GET(
     const words = description.split(' ');
     let currentLine = '';
     
-    words.forEach((word) => {
+    words.forEach((word: string) => {
       const testLine = currentLine + (currentLine ? ' ' : '') + word;
       const testWidth = font.widthOfTextAtSize(testLine, 10);
       
