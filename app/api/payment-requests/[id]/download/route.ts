@@ -447,8 +447,8 @@ export async function GET(
 
   // Black thin line separator between body and footer
   page.drawLine({
-    start: { x: 30, y: y + 20 },
-    end: { x: width - 30, y: y + 20 },
+    start: { x: 30, y: y + 10 },
+    end: { x: width - 30, y: y + 10 },
     thickness: 1,
     color: rgb(0, 0, 0),
   });
