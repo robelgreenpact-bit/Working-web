@@ -308,7 +308,7 @@ export default function FinancePaymentsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm text-gray-600">
-                  Suggested Vendor(s)
+                  Reciver
                 </label>
                 <input
                   type="text"

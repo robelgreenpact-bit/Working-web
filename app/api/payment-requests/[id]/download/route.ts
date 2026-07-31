@@ -242,7 +242,7 @@ export async function GET(
     borderWidth: 1,
   });
 
-  page.drawText("RECEIVER:", {
+  page.drawText("Reciver", {
     x: 55,
     y: y - 10,
     size: 10,

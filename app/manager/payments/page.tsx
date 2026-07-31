@@ -218,7 +218,7 @@ export default function ManagerPaymentsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm text-gray-600">
-                  Suggested Vendor(s)
+                  Reciver
                 </label>
                 <input
                   type="text"
@@ -406,7 +406,7 @@ export default function ManagerPaymentsPage() {
 
                 {r.suggested_vendor && (
                   <p className="mb-2 text-sm text-gray-700">
-                    Suggested Vendor: {r.suggested_vendor}
+                    Reciver: {r.suggested_vendor}
                   </p>
                 )}
 
