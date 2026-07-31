@@ -1,0 +1,67 @@
+import { NextResponse } from "next/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
+
+export async function GET() {
+  const supabase = await createServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data, error } = await supabase
+    .from("requests")
+    .select("*, attachments(*)")
+    .eq("status", "pending_finance")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const serviceClient = getServiceClient();
+
+  const requestsWithDetails = await Promise.all(
+    (data || []).map(async (req) => {
+      const { data: requester } = await serviceClient
+        .from("public_users")
+        .select("name, email")
+        .eq("id", req.requester_id)
+        .single();
+
+      const attachmentsWithUrls = await Promise.all(
+        (req.attachments || []).map(
+          async (att: { id: string; file_url: string }) => {
+            const { data: signedData } = await supabase.storage
+              .from("attachments")
+              .createSignedUrl(att.file_url, 60 * 10);
+
+            return {
+              ...att,
+              signed_url: signedData?.signedUrl || null,
+            };
+          },
+        ),
+      );
+
+      return {
+        ...req,
+        requester,
+        attachments: attachmentsWithUrls,
+      };
+    }),
+  );
+
+  return NextResponse.json({ requests: requestsWithDetails });
+}
