@@ -157,10 +157,42 @@ export async function GET(
     });
     y -= 15;
     
-    const maxWidth = width - 100;
+    // Calculate needed height for description
+    const maxWidth = width - 120;
     const lineHeight = 12;
     const words = description.split(' ');
     let currentLine = '';
+    let lineCount = 0;
+    
+    // First pass: count lines needed
+    words.forEach((word: string) => {
+      const testLine = currentLine + (currentLine ? ' ' : '') + word;
+      const testWidth = font.widthOfTextAtSize(testLine, 10);
+      
+      if (testWidth > maxWidth && currentLine) {
+        lineCount++;
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+    if (currentLine) lineCount++;
+    
+    const descBoxHeight = Math.max(40, (lineCount + 1) * lineHeight);
+    
+    // Draw description box
+    page.drawRectangle({
+      x: 50,
+      y: y - descBoxHeight,
+      width: width - 100,
+      height: descBoxHeight,
+      borderColor: GRAY,
+      borderWidth: 1,
+    });
+    
+    // Wrap text within the box
+    currentLine = '';
+    let currentLineIndex = 0;
     
     words.forEach((word: string) => {
       const testLine = currentLine + (currentLine ? ' ' : '') + word;
@@ -168,12 +200,12 @@ export async function GET(
       
       if (testWidth > maxWidth && currentLine) {
         page.drawText(currentLine, {
-          x: 50,
-          y,
+          x: 60,
+          y: y - 10 - (currentLineIndex * lineHeight),
           size: 10,
           font: font,
         });
-        y -= lineHeight;
+        currentLineIndex++;
         currentLine = word;
       } else {
         currentLine = testLine;
@@ -182,14 +214,14 @@ export async function GET(
     
     if (currentLine) {
       page.drawText(currentLine, {
-        x: 50,
-        y,
+        x: 60,
+        y: y - 10 - (currentLineIndex * lineHeight),
         size: 10,
         font: font,
       });
-      y -= lineHeight;
     }
-    y -= 10;
+    
+    y -= descBoxHeight + 10;
   }
 
   // Vendor and priority boxes
