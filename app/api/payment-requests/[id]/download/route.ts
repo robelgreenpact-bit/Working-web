@@ -445,6 +445,14 @@ export async function GET(
   page.drawRectangle({ x: 380, y: y - 15, width: 100, height: 15, borderColor: GRAY, borderWidth: 1 });
   y -= 40;
 
+  // Black thin line separator between body and footer
+  page.drawLine({
+    start: { x: 30, y: y + 20 },
+    end: { x: width - 30, y: y + 20 },
+    thickness: 1,
+    color: rgb(0, 0, 0),
+  });
+
   // Footer at bottom of page with three-section layout
   const footerY = 70;
   const footerStartX = 30;
