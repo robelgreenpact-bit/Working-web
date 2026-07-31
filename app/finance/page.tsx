@@ -37,11 +37,7 @@ type PaymentRequest = {
 
 const statusLabels: Record<string, string> = {
   pending_manager: "Pending Manager Approval",
-<<<<<<< HEAD
   pending_finance: "Mark as Paid",
-=======
-  pending_finance: "Approved — Ready to Pay",
->>>>>>> c1fe292fe593031cf4a3861cfacc931ee1343f80
   rejected: "Rejected",
   paid: "Paid",
 };
@@ -164,7 +160,6 @@ export default function FinancePaymentsPage() {
 
   const handleMarkPaid = async (id: string) => {
     if (!confirm("Confirm this payment has been made?")) return;
-<<<<<<< HEAD
     const res = await fetch(`/api/finance/payment-requests/${id}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -172,12 +167,6 @@ export default function FinancePaymentsPage() {
         decision: "approved",
         forTaxRegistry: taxRegistryChoice[id] || false,
       }),
-=======
-    const res = await fetch(`/api/payment-requests/${id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "mark_paid" }),
->>>>>>> c1fe292fe593031cf4a3861cfacc931ee1343f80
     });
     const data = await res.json();
     if (!res.ok) {
@@ -569,19 +558,11 @@ export default function FinancePaymentsPage() {
                       </div>
                       <div className="flex gap-2">
                         <button
-<<<<<<< HEAD
                           onClick={() => handleMarkPaid(r.id)}
                           disabled={processingId === r.id}
                           className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
                         >
                           {processingId === r.id ? "Processing..." : "Mark as Paid"}
-=======
-                          onClick={() => handleFinanceDecision(r.id, "approved")}
-                          disabled={processingId === r.id}
-                          className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
-                        >
-                          {processingId === r.id ? "Processing..." : "Approve"}
->>>>>>> c1fe292fe593031cf4a3861cfacc931ee1343f80
                         </button>
                         <button
                           onClick={() => handleFinanceDecision(r.id, "rejected")}
