@@ -66,6 +66,7 @@ export default function FinancePaymentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [taxRegistryChoice, setTaxRegistryChoice] = useState<Record<string, boolean>>({});
 
   const [projectClass, setProjectClass] = useState("");
   const [activityLine, setActivityLine] = useState("");
@@ -165,6 +166,7 @@ export default function FinancePaymentsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         decision: "approved",
+        forTaxRegistry: taxRegistryChoice[id] || false,
       }),
     });
     const data = await res.json();
@@ -507,15 +509,38 @@ export default function FinancePaymentsPage() {
                     </p>
                   )}
 
-                  <div className="mt-2 flex gap-2">
-                    {r.status === "pending_finance" && (
+                  {r.status === "pending_finance" && (
+                    <div className="mt-3 space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`tax-registry-${r.id}`}
+                          checked={taxRegistryChoice[r.id] || false}
+                          onChange={(e) =>
+                            setTaxRegistryChoice({
+                              ...taxRegistryChoice,
+                              [r.id]: e.target.checked,
+                            })
+                          }
+                          className="h-4 w-4 rounded border-gray-300 text-brand-deep focus:ring-brand-deep"
+                        />
+                        <label
+                          htmlFor={`tax-registry-${r.id}`}
+                          className="text-sm font-medium text-gray-700"
+                        >
+                          Send to Tax Registry
+                        </label>
+                      </div>
                       <button
                         onClick={() => handleMarkPaid(r.id)}
                         className="rounded bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
                       >
                         Mark as Paid
                       </button>
-                    )}
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex gap-2">
                     {r.status === "pending_manager" && (
                       <>
                         <button

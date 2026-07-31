@@ -34,7 +34,7 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { decision, comment } = await request.json();
+  const { decision, comment, forTaxRegistry } = await request.json();
 
   if (!decision || !["approved", "rejected"].includes(decision)) {
     return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
@@ -50,6 +50,7 @@ export async function POST(
       status: nextStatus,
       decided_by: user.id,
       decision_comment: comment || null,
+      for_tax_registry: decision === "approved" ? Boolean(forTaxRegistry) : false,
     })
     .eq("id", id);
 
