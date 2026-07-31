@@ -146,6 +146,52 @@ export async function GET(
   drawField("Purpose:", pr.activity_line || "");
   y -= 15;
 
+  // Description section with text wrapping
+  const description = pr.title || "";
+  if (description) {
+    page.drawText("Description:", {
+      x: 50,
+      y,
+      size: 11,
+      font: fontBold,
+    });
+    y -= 15;
+    
+    const maxWidth = width - 100;
+    const lineHeight = 12;
+    const words = description.split(' ');
+    let currentLine = '';
+    
+    words.forEach((word) => {
+      const testLine = currentLine + (currentLine ? ' ' : '') + word;
+      const testWidth = font.widthOfTextAtSize(testLine, 10);
+      
+      if (testWidth > maxWidth && currentLine) {
+        page.drawText(currentLine, {
+          x: 50,
+          y,
+          size: 10,
+          font: font,
+        });
+        y -= lineHeight;
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+    
+    if (currentLine) {
+      page.drawText(currentLine, {
+        x: 50,
+        y,
+        size: 10,
+        font: font,
+      });
+      y -= lineHeight;
+    }
+    y -= 10;
+  }
+
   // Vendor and priority boxes
   page.drawRectangle({
     x: 50,
