@@ -274,7 +274,7 @@ export async function GET(
 
   // Items table header
   const tableX = 50;
-  const colWidths = [80, 80, 40, 30, 50, 50];
+  const colWidths = [80, 150, 40, 30, 50, 50];
   const rowHeight = 20;
 
   page.drawRectangle({
@@ -301,35 +301,100 @@ export async function GET(
 
   // Items
   items.forEach((it: any) => {
+    // Calculate row height based on description length
+    const descText = it.description || "";
+    const descMaxWidth = 150;
+    const descWords = descText.split(' ');
+    let descLineCount = 0;
+    let currentLine = '';
+    
+    descWords.forEach((word: string) => {
+      const testLine = currentLine + (currentLine ? ' ' : '') + word;
+      const testWidth = font.widthOfTextAtSize(testLine, 8);
+      if (testWidth > descMaxWidth && currentLine) {
+        descLineCount++;
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+    if (currentLine) descLineCount++;
+    
+    const itemRowHeight = Math.max(20, (descLineCount + 1) * 10);
+    
     page.drawRectangle({
       x: tableX,
-      y: y - rowHeight,
+      y: y - itemRowHeight,
       width: width - 100,
-      height: rowHeight,
+      height: itemRowHeight,
       borderColor: GRAY,
       borderWidth: 1,
     });
 
-    const values = [
-      it.item_name,
-      it.description || "",
-      it.unit || "",
-      String(it.qty),
-      it.unit_price.toFixed(2),
-      it.total_price.toFixed(2),
-    ];
-    let valueX = tableX + 5;
-    values.forEach((val, j) => {
-      const truncated = val.length > 15 ? val.substring(0, 15) + "..." : val;
-      page.drawText(truncated, {
-        x: valueX,
-        y: y - rowHeight + 5,
+    // Draw item name (truncated if needed)
+    const itemName = it.item_name.length > 15 ? it.item_name.substring(0, 15) + "..." : it.item_name;
+    page.drawText(itemName, {
+      x: tableX + 5,
+      y: y - itemRowHeight + 10,
+      size: 8,
+      font: font,
+    });
+    
+    // Draw description with wrapping
+    let descY = y - itemRowHeight + 10;
+    currentLine = '';
+    descWords.forEach((word: string) => {
+      const testLine = currentLine + (currentLine ? ' ' : '') + word;
+      const testWidth = font.widthOfTextAtSize(testLine, 8);
+      if (testWidth > descMaxWidth && currentLine) {
+        page.drawText(currentLine, {
+          x: tableX + 85,
+          y: descY,
+          size: 8,
+          font: font,
+        });
+        descY -= 10;
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+    if (currentLine) {
+      page.drawText(currentLine, {
+        x: tableX + 85,
+        y: descY,
         size: 8,
         font: font,
       });
-      valueX += colWidths[j];
+    }
+    
+    // Draw other columns
+    page.drawText(it.unit || "", {
+      x: tableX + 235,
+      y: y - itemRowHeight + 10,
+      size: 8,
+      font: font,
     });
-    y -= rowHeight;
+    page.drawText(String(it.qty), {
+      x: tableX + 275,
+      y: y - itemRowHeight + 10,
+      size: 8,
+      font: font,
+    });
+    page.drawText(it.unit_price.toFixed(2), {
+      x: tableX + 305,
+      y: y - itemRowHeight + 10,
+      size: 8,
+      font: font,
+    });
+    page.drawText(it.total_price.toFixed(2), {
+      x: tableX + 355,
+      y: y - itemRowHeight + 10,
+      size: 8,
+      font: font,
+    });
+    
+    y -= itemRowHeight;
   });
 
   y -= 20;
