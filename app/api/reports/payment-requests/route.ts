@@ -85,9 +85,8 @@ export async function GET(request: Request) {
         creatorName: creator?.name || "Unknown",
         amount: p.amount,
         status: p.status,
-        taxRegistered: p.tax_registered ? "Yes" : "No",
-        taxReference: p.tax_reference || "",
         date: new Date(p.created_at).toLocaleDateString(),
+        description: p.title || "",
       };
     }),
   );
@@ -129,8 +128,8 @@ export async function GET(request: Request) {
                     "Created By",
                     "Amount",
                     "Status",
-                    "Tax Reg.",
                     "Date",
+                    "Description",
                   ].map(
                     (h) =>
                       new TableCell({
@@ -152,8 +151,8 @@ export async function GET(request: Request) {
                         r.creatorName,
                         String(r.amount),
                         r.status,
-                        r.taxRegistered,
                         r.date,
+                        r.description,
                       ].map(
                         (val) =>
                           new TableCell({
@@ -192,13 +191,15 @@ export async function GET(request: Request) {
     { header: "Created By", key: "creatorName", width: 20 },
     { header: "Amount (ETB)", key: "amount", width: 14 },
     { header: "Status", key: "status", width: 16 },
-    { header: "Tax Registered", key: "taxRegistered", width: 14 },
-    { header: "Tax Reference", key: "taxReference", width: 18 },
     { header: "Date", key: "date", width: 14 },
+    { header: "Description", key: "description", width: 50 },
   ];
 
   sheet.getRow(1).font = { bold: true };
-  rows.forEach((r) => sheet.addRow(r));
+  rows.forEach((r) => {
+    const row = sheet.addRow(r);
+    row.getCell("description").alignment = { wrapText: true };
+  });
 
   const buffer = await workbook.xlsx.writeBuffer();
 
