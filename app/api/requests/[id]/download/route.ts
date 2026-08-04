@@ -117,7 +117,23 @@ export async function GET(
         .map((line) => (line === "---" ? "--------------------------------" : line))
     : [];
 
-  if (descriptionText.length > 0) {
+  const ignoredLines = new Set([
+    "Perdium Request",
+    "Per Diem Request",
+    "Date:",
+    "Title of Form: Field Allowance Evidence Form for Deploying Employees",
+    "Main Table (Employee Details)",
+    "Field Label (Left Column) | Field/Status (Right Column)",
+    "Approval and Signatures Table",
+    "Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature",
+    "Report Section",
+    "Brief Report of the activities completed",
+    "--------------------------------",
+  ]);
+
+  const cleanedDescriptionText = descriptionText.filter((line) => !ignoredLines.has(line));
+
+  if (cleanedDescriptionText.length > 0) {
     page.drawText("Submitted Details:", {
       x: 50,
       y,
@@ -128,7 +144,6 @@ export async function GET(
 
     const tableX = 50;
     const leftColWidth = 180;
-    const rightColWidth = width - 100 - leftColWidth;
     const rowHeight = 18;
 
     page.drawRectangle({
@@ -154,8 +169,7 @@ export async function GET(
     });
     y -= rowHeight;
 
-    const rows = descriptionText
-      .filter((line) => line.includes(":") || line.includes("|") || line.includes("Request"))
+    const rows = cleanedDescriptionText
       .map((line) => {
         if (line.includes("|")) {
           const [left, right] = line.split("|");
@@ -166,7 +180,8 @@ export async function GET(
           return [parts[0].trim(), parts.slice(1).join(":").trim()];
         }
         return [line, ""];
-      });
+      })
+      .filter(([left, right]) => left && right);
 
     rows.forEach(([left, right]) => {
       const currentY = y - rowHeight;
