@@ -85,12 +85,64 @@ export default function NewRequestPage() {
     justification: "",
     electronics_subcategory: "",
   });
+  const [perDiemFields, setPerDiemFields] = useState({
+    date: "",
+    employee_name: "",
+    investigation_status: "",
+    salary: "",
+    field_deployment_location: "",
+    field_deployment_date: "",
+    date_returned: "",
+    number_of_days: "",
+    payable_amount: "",
+    requester_name: "",
+    reviewer_name: "",
+    approver_name: "",
+    report: "",
+  });
   const [files, setFiles] = useState<FileList | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const config = typeConfig[form.type];
+
+  const buildPerDiemDescription = () => {
+    const lines = [
+      "**Perdium Request**",
+      `**Date:** ${perDiemFields.date || "__________________"}`,
+      "**Title of Form:** Field Allowance Evidence Form for Deploying Employees",
+      "",
+      "---",
+      "",
+      "Main Table (Employee Details)",
+      "",
+      "Field Label (Left Column) | Field/Status (Right Column)",
+      `**Employee's Name** | ${perDiemFields.employee_name || "__________________"}`,
+      `**Investigation / Status** | ${perDiemFields.investigation_status || "__________________"}`,
+      `**Salary** | ${perDiemFields.salary || "__________________"}`,
+      `**Field Deployment Location** | ${perDiemFields.field_deployment_location || "__________________"}`,
+      `**Field Deployment Date** | ${perDiemFields.field_deployment_date || "__________________"}`,
+      `**Date Returned from Deployment** | ${perDiemFields.date_returned || "__________________"}`,
+      `**Number of Days** | ${perDiemFields.number_of_days || "__________________"}`,
+      `**Payable / Total Amount Due** | ${perDiemFields.payable_amount || "__________________"}`,
+      "",
+      "---",
+      "",
+      "Approval and Signatures Table",
+      "",
+      `Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature`,
+      `${perDiemFields.requester_name || "__________________"} | ${perDiemFields.reviewer_name || "__________________"} | ${perDiemFields.approver_name || "__________________"}`,
+      "",
+      "---",
+      "",
+      "Report Section",
+      "**Brief Report of the activities completed**",
+      perDiemFields.report || "",
+    ];
+
+    return lines.join("\n");
+  };
 
   const handleTypeChange = (value: string) => {
     setForm((prev) => ({
@@ -108,10 +160,17 @@ export default function NewRequestPage() {
     setError("");
     setLoading(true);
 
+    const submissionTitle =
+      form.type === "per_diem" && !form.title.trim()
+        ? "Perdium Request"
+        : form.title;
+    const submissionDescription =
+      form.type === "per_diem" ? buildPerDiemDescription() : form.description;
+
     const formData = new FormData();
     formData.append("type", form.type);
-    formData.append("title", form.title);
-    formData.append("description", form.description);
+    formData.append("title", submissionTitle);
+    formData.append("description", submissionDescription);
     formData.append("justification", form.justification);
 
     if (config.needsQuantity) {
@@ -203,29 +262,123 @@ export default function NewRequestPage() {
               required
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="e.g. New laptop for development work"
+              placeholder={
+                form.type === "per_diem"
+                  ? "Perdium Request"
+                  : "e.g. New laptop for development work"
+              }
               className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
             />
           </div>
 
-          <div className="mb-4">
-            <label className="mb-1 block text-sm text-gray-600">
-              {form.type === "per_diem" ? "Perdium Form Template" : "Description"}
-            </label>
-            {form.type === "per_diem" && (
-              <p className="mb-2 text-xs text-amber-700">
-                This request will use the standard perdium evidence format below.
-              </p>
-            )}
-            <textarea
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-              rows={form.type === "per_diem" ? 14 : 3}
-              className="w-full rounded border border-gray-300 p-2 font-mono text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-            />
-          </div>
+          {form.type === "per_diem" ? (
+            <div className="mb-6 rounded border border-amber-200 bg-amber-50 p-4">
+              <h2 className="mb-3 text-lg font-semibold text-brand-deep">
+                Perdium Request
+              </h2>
+              <div className="mb-4">
+                <label className="mb-1 block text-sm text-gray-600">Date</label>
+                <input
+                  type="date"
+                  value={perDiemFields.date}
+                  onChange={(e) =>
+                    setPerDiemFields({ ...perDiemFields, date: e.target.value })
+                  }
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                />
+              </div>
+
+              <div className="overflow-hidden rounded border border-gray-200 bg-white">
+                <div className="grid grid-cols-[1.2fr_1fr] border-b bg-gray-50 text-sm font-medium text-gray-700">
+                  <div className="border-r px-3 py-2">Field Label (Left Column)</div>
+                  <div className="px-3 py-2">Field/Status (Right Column)</div>
+                </div>
+
+                {[
+                  { key: "employee_name", label: "Employee's Name" },
+                  { key: "investigation_status", label: "Investigation / Status" },
+                  { key: "salary", label: "Salary" },
+                  { key: "field_deployment_location", label: "Field Deployment Location" },
+                  { key: "field_deployment_date", label: "Field Deployment Date" },
+                  { key: "date_returned", label: "Date Returned from Deployment" },
+                  { key: "number_of_days", label: "Number of Days" },
+                  { key: "payable_amount", label: "Payable / Total Amount Due" },
+                ].map((row) => (
+                  <div key={row.key} className="grid grid-cols-[1.2fr_1fr] border-b last:border-b-0">
+                    <div className="border-r px-3 py-2 text-sm text-gray-700">
+                      {row.label}
+                    </div>
+                    <div className="px-3 py-2">
+                      <input
+                        type={row.key === "number_of_days" ? "number" : "text"}
+                        value={perDiemFields[row.key as keyof typeof perDiemFields]}
+                        onChange={(e) =>
+                          setPerDiemFields({
+                            ...perDiemFields,
+                            [row.key]: e.target.value,
+                          })
+                        }
+                        className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {[
+                  { key: "requester_name", label: "Requester's Name & Signature" },
+                  { key: "reviewer_name", label: "Reviewer's Name & Signature" },
+                  { key: "approver_name", label: "Approver's Name & Signature" },
+                ].map((field) => (
+                  <div key={field.key}>
+                    <label className="mb-1 block text-sm text-gray-600">
+                      {field.label}
+                    </label>
+                    <input
+                      type="text"
+                      value={perDiemFields[field.key as keyof typeof perDiemFields]}
+                      onChange={(e) =>
+                        setPerDiemFields({
+                          ...perDiemFields,
+                          [field.key]: e.target.value,
+                        })
+                      }
+                      className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4">
+                <label className="mb-1 block text-sm text-gray-600">
+                  Brief Report of the activities completed
+                </label>
+                <textarea
+                  value={perDiemFields.report}
+                  onChange={(e) =>
+                    setPerDiemFields({ ...perDiemFields, report: e.target.value })
+                  }
+                  rows={4}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm text-gray-600">
+                Description
+              </label>
+              <textarea
+                value={form.description}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
+                rows={3}
+                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+              />
+            </div>
+          )}
 
           {(config.needsQuantity || config.needsCost) && (
             <div className="mb-4 grid grid-cols-2 gap-4">
