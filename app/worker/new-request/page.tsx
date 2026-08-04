@@ -158,7 +158,7 @@ export default function NewRequestPage() {
     setLoading(true);
 
     const submissionTitle =
-      form.type === "per_diem" && !form.title.trim()
+      (form.type === "per_diem" || form.type === "other_asset") && !form.title.trim()
         ? "Perdium Request"
         : form.title;
     const submissionDescription =
