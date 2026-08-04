@@ -64,7 +64,15 @@ export async function GET(
   );
 
   const descriptionLines = requestRow.description
-    ? String(requestRow.description).split(/\r?\n/)
+    ? String(requestRow.description)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => line.replace(/\*\*/g, ""))
+        .map((line) => line.replace(/^\*\s*/, ""))
+        .map((line) => line.replace(/^\*+/, ""))
+        .map((line) => line.replace(/\*+$/, ""))
+        .map((line) => (line === "---" ? "--------------------------------" : line))
     : [];
 
   const lines = [
