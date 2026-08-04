@@ -6,7 +6,7 @@ import Navbar from "@/app/components/Navbar";
 
 const typeConfig: Record<
   string,
-  { label: string; needsCost: boolean; needsQuantity: boolean; value?: string }
+  { label: string; needsCost: boolean; needsQuantity: boolean }
 > = {
   physical_good: {
     label: "Physical Good / Equipment",
@@ -24,10 +24,9 @@ const typeConfig: Record<
     needsQuantity: false,
   },
   other_asset: {
-    label: "Perdium for field",
-    needsCost: false,
-    needsQuantity: false,
-    value: "per_diem",
+    label: "Other Asset",
+    needsCost: true,
+    needsQuantity: true,
   },
   document_request: {
     label: "Letter / Document Request",
@@ -120,7 +119,7 @@ export default function NewRequestPage() {
               className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
             >
               {Object.entries(typeConfig).map(([key, cfg]) => (
-                <option key={key} value={cfg.value ?? key}>
+                <option key={key} value={key}>
                   {cfg.label}
                 </option>
               ))}
