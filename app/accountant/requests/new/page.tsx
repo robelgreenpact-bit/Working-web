@@ -24,7 +24,7 @@ const typeConfig: Record<
     needsQuantity: false,
   },
   other_asset: {
-    label: "Other Asset",
+    label: "Perdium for field",
     needsCost: true,
     needsQuantity: true,
   },

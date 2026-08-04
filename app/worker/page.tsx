@@ -35,7 +35,7 @@ const typeLabels: Record<string, string> = {
   electronics: "Electronics",
   travel_expense: "Travel Expense",
   reimbursement: "Reimbursement / Money Refund",
-  other_asset: "Other Asset",
+  other_asset: "Perdium for field",
   document_request: "Letter / Document Request",
   per_diem: "Perdium Request",
 };
