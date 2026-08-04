@@ -82,7 +82,6 @@ export default function NewRequestPage() {
     description: "",
     quantity: 1,
     estimated_cost: "",
-    justification: "",
     electronics_subcategory: "",
   });
   const [perDiemFields, setPerDiemFields] = useState({
@@ -171,7 +170,6 @@ export default function NewRequestPage() {
     formData.append("type", form.type);
     formData.append("title", submissionTitle);
     formData.append("description", submissionDescription);
-    formData.append("justification", form.justification);
 
     if (config.needsQuantity) {
       formData.append("quantity", String(form.quantity));
@@ -254,22 +252,6 @@ export default function NewRequestPage() {
               </select>
             </div>
           )}
-
-          <div className="mb-4">
-            <label className="mb-1 block text-sm text-gray-600">Title</label>
-            <input
-              type="text"
-              required
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder={
-                form.type === "per_diem"
-                  ? "Perdium Request"
-                  : "e.g. New laptop for development work"
-              }
-              className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-            />
-          </div>
 
           {form.type === "per_diem" ? (
             <div className="mb-6 rounded border border-amber-200 bg-amber-50 p-4">
@@ -399,41 +381,8 @@ export default function NewRequestPage() {
                 </div>
               )}
 
-              {config.needsCost && (
-                <div className={config.needsQuantity ? "" : "col-span-2"}>
-                  <label className="mb-1 block text-sm text-gray-600">
-                    Estimated Cost (ETB)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    required
-                    value={form.estimated_cost}
-                    onChange={(e) =>
-                      setForm({ ...form, estimated_cost: e.target.value })
-                    }
-                    className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                  />
-                </div>
-              )}
             </div>
           )}
-
-          <div className="mb-4">
-            <label className="mb-1 block text-sm text-gray-600">
-              Justification
-            </label>
-            <textarea
-              value={form.justification}
-              onChange={(e) =>
-                setForm({ ...form, justification: e.target.value })
-              }
-              rows={3}
-              placeholder="Why is this needed?"
-              className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-            />
-          </div>
 
           <div className="mb-6">
             <label className="mb-1 block text-sm text-gray-600">
