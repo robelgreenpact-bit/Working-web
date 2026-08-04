@@ -4,6 +4,36 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 
+const perDiemTemplate = `**Per Diem Request**
+**Date:** ____________________
+**Title of Form:** Field Allowance Evidence Form for Deploying Employees
+
+---
+
+Main Table (Employee Details)
+
+Field Label (Left Column) | Field/Status (Right Column)
+**Employee's Name** | ____________________
+**Investigation / Status** | ____________________
+**Salary** | ____________________
+**Field Deployment Location** | ____________________
+**Field Deployment Date** | ____________________
+**Date Returned from Deployment** | ____________________
+**Number of Days** | ____________________
+**Payable / Total Amount Due** | ____________________
+
+---
+
+Approval and Signatures Table
+
+Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature
+
+---
+
+Report Section
+**Brief Report of the activities completed**
+*(Blank section box for notes)*`;
+
 const typeConfig: Record<
   string,
   { label: string; needsCost: boolean; needsQuantity: boolean }
@@ -12,6 +42,11 @@ const typeConfig: Record<
     label: "Physical Good / Equipment",
     needsCost: true,
     needsQuantity: true,
+  },
+  per_diem: {
+    label: "Perdium Request",
+    needsCost: true,
+    needsQuantity: false,
   },
   electronics: {
     label: "Electronics",
@@ -56,6 +91,17 @@ export default function NewRequestPage() {
   const router = useRouter();
 
   const config = typeConfig[form.type];
+
+  const handleTypeChange = (value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      type: value,
+      description:
+        value === "per_diem" ? perDiemTemplate : "",
+      electronics_subcategory:
+        value === "electronics" ? prev.electronics_subcategory : "",
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +167,7 @@ export default function NewRequestPage() {
             </label>
             <select
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value, electronics_subcategory: "" })}
+              onChange={(e) => handleTypeChange(e.target.value)}
               className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
             >
               {Object.entries(typeConfig).map(([key, cfg]) => (
@@ -164,15 +210,20 @@ export default function NewRequestPage() {
 
           <div className="mb-4">
             <label className="mb-1 block text-sm text-gray-600">
-              Description
+              {form.type === "per_diem" ? "Perdium Form Template" : "Description"}
             </label>
+            {form.type === "per_diem" && (
+              <p className="mb-2 text-xs text-amber-700">
+                This request will use the standard perdium evidence format below.
+              </p>
+            )}
             <textarea
               value={form.description}
               onChange={(e) =>
                 setForm({ ...form, description: e.target.value })
               }
-              rows={3}
-              className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+              rows={form.type === "per_diem" ? 14 : 3}
+              className="w-full rounded border border-gray-300 p-2 font-mono text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
             />
           </div>
 

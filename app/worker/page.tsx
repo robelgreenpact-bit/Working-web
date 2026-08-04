@@ -26,6 +26,16 @@ const statusLabels: Record<string, string> = {
   rejected: "Rejected",
 };
 
+const typeLabels: Record<string, string> = {
+  physical_good: "Physical Good / Equipment",
+  electronics: "Electronics",
+  travel_expense: "Travel Expense",
+  reimbursement: "Reimbursement / Money Refund",
+  other_asset: "Other Asset",
+  document_request: "Letter / Document Request",
+  per_diem: "Perdium Request",
+};
+
 const statusColors: Record<string, string> = {
   pending_manager: "bg-amber-100 text-amber-800",
   pending_finance: "bg-blue-100 text-blue-800",
@@ -134,8 +144,8 @@ export default function WorkerPage() {
                 {requests.map((r) => (
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="py-2">{r.title}</td>
-                    <td className="py-2 capitalize">
-                      {(r.type || "").replace("_", " ")}
+                    <td className="py-2">
+                      {typeLabels[r.type] || (r.type || "").replaceAll("_", " ")}
                     </td>
                     <td className="py-2">{r.estimated_cost}</td>
                     <td className="py-2">
