@@ -31,5 +31,20 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ requests: data });
+  const requestsWithRequester = await Promise.all(
+    (data || []).map(async (request: { requester_id: string }) => {
+      const { data: requester } = await supabase
+        .from("public_users")
+        .select("name, email")
+        .eq("id", request.requester_id)
+        .single();
+
+      return {
+        ...request,
+        requester: requester || null,
+      };
+    }),
+  );
+
+  return NextResponse.json({ requests: requestsWithRequester });
 }

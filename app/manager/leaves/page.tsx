@@ -6,6 +6,7 @@ import Navbar from "@/app/components/Navbar";
 type LeaveRequest = {
   id: string;
   requester_id: string;
+  requester: { name: string; email: string } | null;
   start_date: string;
   end_date: string;
   days_count: number;
@@ -41,11 +42,22 @@ export default function ManagerLeavePage() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
 
   const loadRequests = async () => {
     setLoading(true);
+    setError("");
     const res = await fetch("/api/manager/leaves");
     const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error || "Failed to load leave requests");
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
+
     setRequests(data.requests || []);
     setLoading(false);
   };
@@ -56,11 +68,12 @@ export default function ManagerLeavePage() {
 
   const handleDecision = async (id: string, decision: "approved" | "rejected") => {
     setError("");
+    setSuccess("");
     setProcessingId(id);
     const res = await fetch(`/api/manager/leaves/${id}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, comment: commentDrafts[id] || "" }),
     });
     const data = await res.json();
     setProcessingId(null);
@@ -70,7 +83,13 @@ export default function ManagerLeavePage() {
       return;
     }
 
-    loadRequests();
+    setCommentDrafts((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    setSuccess(decision === "approved" ? "Leave request approved." : "Leave request rejected.");
+    await loadRequests();
   };
 
   return (
@@ -87,6 +106,9 @@ export default function ManagerLeavePage() {
         {error ? (
           <div className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{error}</div>
         ) : null}
+        {success ? (
+          <div className="mb-4 rounded bg-green-50 p-3 text-sm text-green-700">{success}</div>
+        ) : null}
 
         <div className="rounded-lg border-t-4 border-brand bg-white p-6 shadow">
           {loading ? (
@@ -101,10 +123,14 @@ export default function ManagerLeavePage() {
                     <div>
                       <p className="font-semibold text-gray-900">{request.reason}</p>
                       <p className="text-sm text-gray-600">
-                        {request.requester_id} • {formatDate(request.start_date)} to {formatDate(request.end_date)}
+                        {request.requester?.name || "Unknown requester"}
+                        {request.requester?.email ? ` • ${request.requester.email}` : ""}
                       </p>
                       <p className="text-sm text-gray-600">
-                        {request.days_count} day{request.days_count === 1 ? "" : "s"} requested
+                        {formatDate(request.start_date)} to {formatDate(request.end_date)} • {request.days_count} day{request.days_count === 1 ? "" : "s"} requested
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Submitted {new Date(request.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -133,6 +159,26 @@ export default function ManagerLeavePage() {
                       ) : null}
                     </div>
                   </div>
+                  {request.status === "pending" ? (
+                    <div className="mt-3">
+                      <label className="mb-1 block text-sm text-gray-600">Comment (optional)</label>
+                      <textarea
+                        rows={2}
+                        value={commentDrafts[request.id] || ""}
+                        onChange={(e) =>
+                          setCommentDrafts((current) => ({
+                            ...current,
+                            [request.id]: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                        placeholder="Add a note for the requester"
+                      />
+                    </div>
+                  ) : null}
+                  {request.manager_comment ? (
+                    <p className="mt-2 text-sm text-gray-600">Manager note: {request.manager_comment}</p>
+                  ) : null}
                 </div>
               ))}
             </div>

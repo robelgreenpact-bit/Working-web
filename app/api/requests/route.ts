@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const justification = formData.get("justification") as string;
   const files = formData.getAll("files") as File[];
 
-  const needsCost = type !== "document_request";
+  const needsCost = type !== "document_request" && type !== "per_diem";
 
   if (!type || !title) {
     return NextResponse.json(

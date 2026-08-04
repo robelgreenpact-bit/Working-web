@@ -52,6 +52,10 @@ function daysAgo(dateStr: string) {
   return `${days} days ago`;
 }
 
+const handleDownload = (requestId: string) => {
+  window.open(`/api/requests/${requestId}/download`, "_blank");
+};
+
 export default function FinancePage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -306,7 +310,7 @@ export default function FinancePage() {
                   className="mb-3 w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
                 />
 
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   <button
                     onClick={() => handleDecision(r.id, "approved")}
                     disabled={processing === r.id}
@@ -321,6 +325,14 @@ export default function FinancePage() {
                   >
                     Reject
                   </button>
+                  {r.type === "per_diem" && (
+                    <button
+                      onClick={() => handleDownload(r.id)}
+                      className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700"
+                    >
+                      Download PDF
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

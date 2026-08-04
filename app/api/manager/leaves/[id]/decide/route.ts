@@ -16,6 +16,16 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from("public_users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "manager") {
+    return NextResponse.json({ error: "Only managers can access this page" }, { status: 403 });
+  }
+
   const { decision, comment } = await request.json();
 
   if (!decision || !["approved", "rejected"].includes(decision)) {

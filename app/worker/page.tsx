@@ -12,6 +12,10 @@ type RequestRow = {
   created_at: string;
 };
 
+const handleDownload = (requestId: string) => {
+  window.open(`/api/requests/${requestId}/download`, "_blank");
+};
+
 type BorrowedAsset = {
   id: string;
   asset_tag: string;
@@ -138,6 +142,7 @@ export default function WorkerPage() {
                   <th className="pb-2">Cost</th>
                   <th className="pb-2">Date Requested</th>
                   <th className="pb-2">Status</th>
+                  <th className="pb-2">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -159,6 +164,18 @@ export default function WorkerPage() {
                       >
                         {statusLabels[r.status] || r.status}
                       </span>
+                    </td>
+                    <td className="py-2">
+                      {r.type === "per_diem" ? (
+                        <button
+                          onClick={() => handleDownload(r.id)}
+                          className="rounded bg-brand-deep px-3 py-1 text-xs font-medium text-white transition hover:bg-brand-dark"
+                        >
+                          Download PDF
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
