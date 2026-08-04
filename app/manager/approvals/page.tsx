@@ -44,6 +44,49 @@ function daysAgo(dateStr: string) {
   return `${days} days ago`;
 }
 
+function parsePerDiemDetails(description: string | null) {
+  if (!description) return [] as Array<{ label: string; value: string }>;
+
+  const lines = String(description)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => line.replace(/\*\*/g, ""))
+    .map((line) => line.replace(/^\*\s*/, ""))
+    .map((line) => line.replace(/^\*+/, ""))
+    .map((line) => line.replace(/\*+$/, ""));
+
+  const ignoredLines = new Set([
+    "Perdium Request",
+    "Per Diem Request",
+    "Date:",
+    "Title of Form: Field Allowance Evidence Form for Deploying Employees",
+    "Main Table (Employee Details)",
+    "Field Label (Left Column) | Field/Status (Right Column)",
+    "Approval and Signatures Table",
+    "Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature",
+    "Report Section",
+    "Brief Report of the activities completed",
+    "--------------------------------",
+    "---",
+  ]);
+
+  return lines
+    .filter((line) => !ignoredLines.has(line))
+    .map((line) => {
+      if (line.includes("|")) {
+        const [left, right] = line.split("|");
+        return { label: left.trim(), value: right?.trim() || "" };
+      }
+      const parts = line.split(":");
+      if (parts.length >= 2) {
+        return { label: parts[0].trim(), value: parts.slice(1).join(":").trim() };
+      }
+      return { label: line, value: "" };
+    })
+    .filter((item) => item.label && item.value);
+}
+
 const handleDownload = (requestId: string) => {
   window.open(`/api/requests/${requestId}/download`, "_blank");
 };
@@ -139,8 +182,26 @@ export default function ManagerApprovalsPage() {
                   </span>
                 </div>
 
-                {r.description && (
-                  <p className="mb-2 text-sm text-gray-700">{r.description}</p>
+                {r.type === "per_diem" ? (
+                  <div className="mb-3 rounded border border-amber-100 bg-amber-50 p-3">
+                    <p className="mb-2 text-sm font-semibold text-amber-800">
+                      Per Diem Details
+                    </p>
+                    <div className="grid gap-2 text-sm text-gray-700 sm:grid-cols-2">
+                      {parsePerDiemDetails(r.description).map((item, index) => (
+                        <div key={`${item.label}-${index}`}>
+                          <span className="font-medium text-gray-900">
+                            {item.label}:
+                          </span>{" "}
+                          {item.value}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  r.description && (
+                    <p className="mb-2 text-sm text-gray-700">{r.description}</p>
+                  )
                 )}
 
                 <div className="mb-2 flex gap-6 text-sm text-gray-700">
