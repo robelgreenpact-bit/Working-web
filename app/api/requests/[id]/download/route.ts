@@ -52,35 +52,27 @@ export async function GET(
     height: 24,
     color: green,
   });
-  page.drawText("Perdium Request", {
-    x: 60,
-    y: height - 30,
-    size: 16,
-    font: fontBold,
-    color: rgb(1, 1, 1),
-  });
+  page.drawText(
+    requestRow.type === "per_diem" ? "Perdium Request" : "Request Details",
+    {
+      x: 60,
+      y: height - 30,
+      size: 16,
+      font: fontBold,
+      color: rgb(1, 1, 1),
+    },
+  );
+
+  const descriptionLines = requestRow.description
+    ? String(requestRow.description).split(/\r?\n/)
+    : [];
 
   const lines = [
     `Date: ${requestRow.created_at ? new Date(requestRow.created_at).toLocaleDateString() : ""}`,
     `Title: ${requestRow.title || ""}`,
+    `Type: ${requestRow.type || ""}`,
     "",
-    "Main Table (Employee Details)",
-    "",
-    "Field Label (Left Column) | Field/Status (Right Column)",
-    `Employee's Name | ${""}`,
-    `Perdium amount | ${""}`,
-    `Field Deployment Location | ${""}`,
-    `Field Deployment Date | ${""}`,
-    `Date Returned from Deployment | ${""}`,
-    `Number of Days | ${""}`,
-    `Growth amount | ${""}`,
-    "",
-    "Approval and Signatures Table",
-    "",
-    "Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature",
-    "",
-    "Report Section",
-    requestRow.description || "",
+    ...descriptionLines,
   ];
 
   let y = height - 90;
