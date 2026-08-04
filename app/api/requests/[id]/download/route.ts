@@ -129,6 +129,17 @@ export async function GET(
     "Report Section",
     "Brief Report of the activities completed",
     "--------------------------------",
+    "---",
+    "Requester's Name & Signature",
+    "Reviewer's Name & Signature",
+    "Approver's Name & Signature",
+    "Employee's Name",
+    "Perdium amount",
+    "Field Deployment Location",
+    "Field Deployment Date",
+    "Date Returned from Deployment",
+    "Number of Days",
+    "Payable / Total Amount Due",
   ]);
 
   const cleanedDescriptionText = descriptionText.filter((line) => !ignoredLines.has(line));
@@ -220,7 +231,9 @@ export async function GET(
         .map((line) => line.replace(/^\*\s*/, ""))
         .map((line) => line.replace(/^\*+/, ""))
         .map((line) => line.replace(/\*+$/, ""))
-        .filter((line) => line.toLowerCase().includes("brief report") || line.toLowerCase().includes("activities completed") || line.length > 0)
+        .filter((line) => !ignoredLines.has(line))
+        .filter((line) => !line.toLowerCase().includes("brief report") && !line.toLowerCase().includes("activities completed"))
+        .filter((line) => !line.includes("|") && !line.includes(":"))
     : [];
 
   if (reportText.length > 0) {
