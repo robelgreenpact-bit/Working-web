@@ -45,7 +45,7 @@ const typeConfig: Record<
   },
   per_diem: {
     label: "Perdium Request",
-    needsCost: true,
+    needsCost: false,
     needsQuantity: false,
   },
   electronics: {
@@ -87,7 +87,6 @@ export default function NewRequestPage() {
   const [perDiemFields, setPerDiemFields] = useState({
     date: "",
     employee_name: "",
-    investigation_status: "",
     salary: "",
     field_deployment_location: "",
     field_deployment_date: "",
@@ -118,8 +117,7 @@ export default function NewRequestPage() {
       "",
       "Field Label (Left Column) | Field/Status (Right Column)",
       `**Employee's Name** | ${perDiemFields.employee_name || "__________________"}`,
-      `**Investigation / Status** | ${perDiemFields.investigation_status || "__________________"}`,
-      `**Salary** | ${perDiemFields.salary || "__________________"}`,
+      `**Perdium amount** | ${perDiemFields.salary || "__________________"}`,
       `**Field Deployment Location** | ${perDiemFields.field_deployment_location || "__________________"}`,
       `**Field Deployment Date** | ${perDiemFields.field_deployment_date || "__________________"}`,
       `**Date Returned from Deployment** | ${perDiemFields.date_returned || "__________________"}`,
@@ -278,13 +276,12 @@ export default function NewRequestPage() {
 
                 {[
                   { key: "employee_name", label: "Employee's Name" },
-                  { key: "investigation_status", label: "Investigation / Status" },
-                  { key: "salary", label: "Salary" },
+                  { key: "salary", label: "Perdium amount" },
                   { key: "field_deployment_location", label: "Field Deployment Location" },
                   { key: "field_deployment_date", label: "Field Deployment Date" },
                   { key: "date_returned", label: "Date Returned from Deployment" },
                   { key: "number_of_days", label: "Number of Days" },
-                  { key: "payable_amount", label: "Payable / Total Amount Due" },
+                  { key: "payable_amount", label: "Growth amount" },
                 ].map((row) => (
                   <div key={row.key} className="grid grid-cols-[1.2fr_1fr] border-b last:border-b-0">
                     <div className="border-r px-3 py-2 text-sm text-gray-700">
