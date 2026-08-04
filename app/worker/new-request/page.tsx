@@ -378,6 +378,24 @@ export default function NewRequestPage() {
                 </div>
               )}
 
+              {config.needsCost && (
+                <div className={config.needsQuantity ? "" : "col-span-2"}>
+                  <label className="mb-1 block text-sm text-gray-600">
+                    Estimated Cost (ETB)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    required
+                    value={form.estimated_cost}
+                    onChange={(e) =>
+                      setForm({ ...form, estimated_cost: e.target.value })
+                    }
+                    className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                  />
+                </div>
+              )}
             </div>
           )}
 
