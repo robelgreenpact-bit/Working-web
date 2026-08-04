@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+const VALID_REQUEST_TYPES = [
+  "physical_good",
+  "electronics",
+  "travel_expense",
+  "reimbursement",
+  "other_asset",
+  "document_request",
+  "per_diem",
+];
+
 export async function POST(request: Request) {
   const supabase = await createClient();
 
@@ -26,6 +36,13 @@ export async function POST(request: Request) {
   if (!type || !title) {
     return NextResponse.json(
       { error: "Type and title are required" },
+      { status: 400 },
+    );
+  }
+
+  if (!VALID_REQUEST_TYPES.includes(type)) {
+    return NextResponse.json(
+      { error: "Invalid request type" },
       { status: 400 },
     );
   }
