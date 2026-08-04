@@ -211,13 +211,59 @@ export async function GET(
 
   y -= 20;
 
-  page.drawText("Requested By:", { x: 50, y, size: 12, font: fontBold });
-  page.drawText(user.email || "", { x: 150, y, size: 12, font: font });
-  y -= 20;
+  const reportText = requestRow.description
+    ? String(requestRow.description)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => line.replace(/\*\*/g, ""))
+        .map((line) => line.replace(/^\*\s*/, ""))
+        .map((line) => line.replace(/^\*+/, ""))
+        .map((line) => line.replace(/\*+$/, ""))
+        .filter((line) => line.toLowerCase().includes("brief report") || line.toLowerCase().includes("activities completed") || line.length > 0)
+    : [];
 
-  page.drawText("Signature:", { x: 50, y, size: 12, font: fontBold });
-  page.drawRectangle({ x: 130, y: y - 15, width: 140, height: 15, borderColor: GRAY, borderWidth: 1 });
-  y -= 35;
+  if (reportText.length > 0) {
+    page.drawText("Brief Report of the activities completed", {
+      x: 50,
+      y,
+      size: 12,
+      font: fontBold,
+    });
+    y -= 14;
+
+    const maxWidth = width - 120;
+    const words = reportText.join(" ").split(/\s+/);
+    let currentLine = "";
+    const lines: string[] = [];
+
+    words.forEach((word) => {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = font.widthOfTextAtSize(testLine, 10);
+      if (testWidth > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    lines.forEach((line) => {
+      page.drawText(line, {
+        x: 60,
+        y,
+        size: 10,
+        font: font,
+      });
+      y -= 12;
+    });
+  }
+
+  y -= 20;
 
   const footerY = 70;
   const footerStartX = 30;
