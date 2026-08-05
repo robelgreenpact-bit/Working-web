@@ -84,7 +84,7 @@ export async function GET(request: Request) {
   );
 
   const today = new Date().toISOString().split("T")[0];
-  const filenameBase = `asset-registry_downloaded-${today}`;
+  const filenameBase = `GREENPACT-office-assets-list_${today}`;
 
   if (format === "docx") {
     const doc = new Document({
@@ -94,13 +94,35 @@ export async function GET(request: Request) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Greenpact - Asset Registry",
+                  text: "Greenpact Research PLC",
+                  bold: true,
+                  size: 28,
+                  color: "1E9E5A",
+                }),
+              ],
+              alignment: "center",
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "GREENPACT office Assets List",
                   bold: true,
                   size: 32,
                 }),
               ],
+              alignment: "center",
+              spacing: { after: 200 },
             }),
-            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "____________________________________________________________________________",
+                  color: "1E9E5A",
+                }),
+              ],
+              alignment: "center",
+              spacing: { after: 400 },
+            }),
             new Table({
               width: { size: 100, type: WidthType.PERCENTAGE },
               rows: [
@@ -166,6 +188,27 @@ export async function GET(request: Request) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Asset Registry");
 
+  // Add header
+  sheet.mergeCells('A1:I1');
+  const headerCell = sheet.getCell('A1');
+  headerCell.value = "Greenpact Research PLC";
+  headerCell.font = { bold: true, size: 14, color: { argb: 'FF1E9E5A' } };
+  headerCell.alignment = { horizontal: 'center' };
+
+  sheet.mergeCells('A2:I2');
+  const titleCell = sheet.getCell('A2');
+  titleCell.value = "GREENPACT office Assets List";
+  titleCell.font = { bold: true, size: 16 };
+  titleCell.alignment = { horizontal: 'center' };
+
+  // Add green line
+  sheet.mergeCells('A3:I3');
+  const lineCell = sheet.getCell('A3');
+  lineCell.value = "____________________________________________________________________________";
+  lineCell.font = { color: { argb: 'FF1E9E5A' } };
+  lineCell.alignment = { horizontal: 'center' };
+
+  // Add column headers starting from row 4
   sheet.columns = [
     { header: "Tag", key: "tag", width: 14 },
     { header: "Item Name", key: "itemName", width: 25 },
@@ -178,7 +221,7 @@ export async function GET(request: Request) {
     { header: "Status", key: "status", width: 16 },
   ];
 
-  sheet.getRow(1).font = { bold: true };
+  sheet.getRow(4).font = { bold: true };
   rows.forEach((r) => sheet.addRow(r));
 
   const buffer = await workbook.xlsx.writeBuffer();
