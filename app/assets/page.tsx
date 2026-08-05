@@ -104,6 +104,9 @@ export default function AssetsPage() {
       ...form,
       purchase_cost: form.purchase_cost ? Number(form.purchase_cost) : null,
       assigned_to: form.assigned_to || null,
+      electronics_subcategory: form.electronics_subcategory || null,
+      serial_number: form.serial_number || null,
+      quantity: form.quantity ? Number(form.quantity) : null,
     };
 
     const res = editingId
@@ -146,6 +149,10 @@ export default function AssetsPage() {
     });
     setEditingId(asset.id);
     setShowForm(true);
+    // Scroll to form
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   const handleCancelForm = () => {
