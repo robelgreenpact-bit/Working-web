@@ -194,7 +194,7 @@ export default function AssetsPage() {
   return (
     <div>
       <Navbar title="Asset Registry" />
-      <div className="mx-auto max-w-5xl p-8">
+      <div className="mx-auto max-w-7xl p-8">
         <div className="mb-8 flex items-center justify-between fade-in">
           <div>
             <h1 className="text-3xl font-bold text-brand-deep">Asset Registry</h1>
