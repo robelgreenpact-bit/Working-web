@@ -186,7 +186,7 @@ export async function GET(request: Request) {
   }
 
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Asset Registry");
+  const sheet = workbook.addWorksheet("Greenpact Assets");
 
   // Add header - Company name
   sheet.mergeCells('A1:I1');
