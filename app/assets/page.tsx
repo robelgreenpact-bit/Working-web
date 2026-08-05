@@ -131,9 +131,9 @@ export default function AssetsPage() {
   const handleEditClick = (asset: Asset) => {
     setForm({
       category: asset.category,
-      electronics_subcategory: "",
+      electronics_subcategory: asset.electronics_subcategory || "",
       item_name: asset.item_name || "",
-      serial_number: "",
+      serial_number: asset.serial_number || "",
       assigned_to: asset.assigned_to || "",
       purchase_cost: asset.purchase_cost ? String(asset.purchase_cost) : "",
       purchase_date: asset.purchase_date || "",
