@@ -129,6 +129,7 @@ export async function POST(request: Request) {
     purchase_date,
     status,
     location,
+    quantity,
   } = body;
 
   if (!category) {
@@ -138,6 +139,49 @@ export async function POST(request: Request) {
     );
   }
 
+  // Handle furniture with quantity
+  if (category === "furniture" && quantity && Number(quantity) > 1) {
+    const numQuantity = Number(quantity);
+    const createdAssets = [];
+
+    for (let i = 0; i < numQuantity; i++) {
+      let assetTag = await generateAssetTag(supabase, category);
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      while (attempts < maxAttempts) {
+        const { data, error } = await supabase.from("assets").insert({
+          asset_tag: assetTag,
+          category,
+          item_name: item_name || null,
+          serial_number: serial_number || null,
+          assigned_to: assigned_to || null,
+          purchase_cost: purchase_cost || null,
+          purchase_date: purchase_date || null,
+          status: status || "in_use",
+          location: location || null,
+          quantity: numQuantity,
+        }).select().single();
+
+        if (error) {
+          if (error.code === "23505") {
+            // Duplicate key error - generate a new tag and retry
+            attempts++;
+            assetTag = await generateAssetTag(supabase, category);
+            continue;
+          }
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        createdAssets.push(data);
+        break;
+      }
+    }
+
+    return NextResponse.json({ success: true, count: createdAssets.length });
+  }
+
+  // Handle single asset (non-furniture or furniture with quantity 1)
   let assetTag = await generateAssetTag(supabase, category);
   let attempts = 0;
   const maxAttempts = 5;
@@ -153,6 +197,7 @@ export async function POST(request: Request) {
       purchase_date: purchase_date || null,
       status: status || "in_use",
       location: location || null,
+      quantity: quantity ? Number(quantity) : null,
     });
 
     if (error) {

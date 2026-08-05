@@ -19,6 +19,7 @@ type Asset = {
   purchase_date: string | null;
   status: string;
   location: string | null;
+  quantity: number | null;
 };
 
 type UserOption = {
@@ -54,6 +55,7 @@ export default function AssetsPage() {
     purchase_date: "",
     status: "new",
     location: "",
+    quantity: "",
   });
 
   const loadAssets = async () => {
@@ -89,6 +91,7 @@ export default function AssetsPage() {
       purchase_date: "",
       status: "new",
       location: "",
+      quantity: "",
     });
     setEditingId(null);
   };
@@ -139,6 +142,7 @@ export default function AssetsPage() {
       purchase_date: asset.purchase_date || "",
       status: asset.status,
       location: asset.location || "",
+      quantity: asset.quantity ? String(asset.quantity) : "",
     });
     setEditingId(asset.id);
     setShowForm(true);
@@ -273,6 +277,24 @@ export default function AssetsPage() {
                 className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
               />
             </div>
+
+            {form.category === "furniture" && (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={form.quantity}
+                  onChange={(e) =>
+                    setForm({ ...form, quantity: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
+                />
+              </div>
+            )}
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
