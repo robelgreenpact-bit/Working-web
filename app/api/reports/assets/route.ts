@@ -105,9 +105,8 @@ export async function GET(request: Request) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "GREENPACT office Assets List",
-                  bold: true,
-                  size: 32,
+                  text: "____________________________________________________________________________",
+                  color: "1E9E5A",
                 }),
               ],
               alignment: "center",
@@ -116,8 +115,9 @@ export async function GET(request: Request) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "____________________________________________________________________________",
-                  color: "1E9E5A",
+                  text: "GREENPACT office Assets List",
+                  bold: true,
+                  size: 32,
                 }),
               ],
               alignment: "center",
@@ -188,25 +188,26 @@ export async function GET(request: Request) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Asset Registry");
 
-  // Add header
+  // Add header - Company name
   sheet.mergeCells('A1:I1');
   const headerCell = sheet.getCell('A1');
   headerCell.value = "Greenpact Research PLC";
   headerCell.font = { bold: true, size: 14, color: { argb: 'FF1E9E5A' } };
   headerCell.alignment = { horizontal: 'center' };
 
-  sheet.mergeCells('A2:I2');
-  const titleCell = sheet.getCell('A2');
-  titleCell.value = "GREENPACT office Assets List";
-  titleCell.font = { bold: true, size: 16 };
-  titleCell.alignment = { horizontal: 'center' };
-
   // Add green line
-  sheet.mergeCells('A3:I3');
-  const lineCell = sheet.getCell('A3');
+  sheet.mergeCells('A2:I2');
+  const lineCell = sheet.getCell('A2');
   lineCell.value = "____________________________________________________________________________";
   lineCell.font = { color: { argb: 'FF1E9E5A' } };
   lineCell.alignment = { horizontal: 'center' };
+
+  // Add title
+  sheet.mergeCells('A3:I3');
+  const titleCell = sheet.getCell('A3');
+  titleCell.value = "GREENPACT office Assets List";
+  titleCell.font = { bold: true, size: 16 };
+  titleCell.alignment = { horizontal: 'center' };
 
   // Add column headers starting from row 4
   sheet.columns = [
