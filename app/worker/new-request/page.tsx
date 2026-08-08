@@ -251,7 +251,7 @@ export default function NewRequestPage() {
             </div>
           )}
 
-          {form.type !== "per_diem" && form.type !== "other_asset" && (
+          {form.type !== "per_diem" && (
             <div className="mb-4">
               <label className="mb-1 block text-sm text-gray-600">
                 Title
