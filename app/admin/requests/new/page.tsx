@@ -251,6 +251,20 @@ export default function NewRequestPage() {
             </div>
           )}
 
+          <div className="mb-4">
+            <label className="mb-1 block text-sm text-gray-600">
+              Title
+            </label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              required
+              className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+              placeholder="Enter request title"
+            />
+          </div>
+
           {form.type === "per_diem" ? (
             <div className="mb-6 rounded border border-amber-200 bg-amber-50 p-4">
               <h2 className="mb-3 text-lg font-semibold text-brand-deep">
