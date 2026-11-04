@@ -6,15 +6,21 @@ import Navbar from "@/app/components/Navbar";
 type InventoryItem = {
   category: string;
   item_name: string;
-  total_count: number;
   available_count: number;
-  borrowed_count: number;
-  borrowed_by: string[];
+};
+
+type InventoryAsset = {
+  asset_tag: string;
+  category: string | null;
+  item_name: string | null;
+  serial_number: string | null;
 };
 
 export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [inventoryAssets, setInventoryAssets] = useState<InventoryAsset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [serialSearch, setSerialSearch] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -22,6 +28,7 @@ export default function InventoryPage() {
       .then((res) => res.json())
       .then((data) => {
         setInventory(data.inventory || []);
+        setInventoryAssets(data.assets || []);
         setLoading(false);
       })
       .catch(() => {
@@ -36,6 +43,12 @@ export default function InventoryPage() {
     office_supplies: "bg-purple-100 text-purple-800",
     other: "bg-gray-100 text-gray-800",
   };
+
+  const matchingAssets = serialSearch.trim()
+    ? inventoryAssets.filter((asset) =>
+        asset.serial_number?.toLowerCase().includes(serialSearch.trim().toLowerCase()),
+      )
+    : [];
 
   return (
     <div>
@@ -55,6 +68,53 @@ export default function InventoryPage() {
         </div>
 
         <div className="rounded-2xl border-t-4 border-brand bg-white/95 backdrop-blur-sm p-6 shadow-xl fade-in">
+          <label className="mb-5 block max-w-xl">
+            <span className="mb-2 block text-sm font-medium text-gray-700">
+              Search by serial number
+            </span>
+            <input
+              type="search"
+              value={serialSearch}
+              onChange={(e) => setSerialSearch(e.target.value)}
+              placeholder="Enter a serial number, especially for tablets"
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
+            />
+          </label>
+
+          {serialSearch.trim() && !loading && (
+            <div className="mb-8">
+              <h2 className="mb-3 text-lg font-semibold text-brand-deep">
+                Matching available assets
+              </h2>
+              {matchingAssets.length === 0 ? (
+                <p className="text-sm text-gray-500">No available assets match that serial number.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-gray-200">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-600">
+                        <th className="px-4 py-3 font-semibold">Item</th>
+                        <th className="px-4 py-3 font-semibold">Serial Number</th>
+                        <th className="px-4 py-3 font-semibold">Asset Tag</th>
+                        <th className="px-4 py-3 font-semibold">Category</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {matchingAssets.map((asset) => (
+                        <tr key={asset.asset_tag} className="border-t border-gray-100">
+                          <td className="px-4 py-3 font-medium text-gray-900">{asset.item_name || "—"}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{asset.serial_number}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{asset.asset_tag}</td>
+                          <td className="px-4 py-3">{(asset.category || "other").replaceAll("_", " ")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {loading ? (
             <div className="space-y-4">
               <div className="h-8 shimmer rounded-lg" />
@@ -128,10 +188,7 @@ export default function InventoryPage() {
                         <thead>
                           <tr className="bg-gray-50 text-gray-600">
                             <th className="px-4 py-3 font-semibold">Item Name</th>
-                            <th className="px-4 py-3 text-center font-semibold">Total</th>
                             <th className="px-4 py-3 text-center font-semibold">Available</th>
-                            <th className="px-4 py-3 text-center font-semibold">Borrowed</th>
-                            <th className="px-4 py-3 font-semibold">Borrowed By</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -142,11 +199,6 @@ export default function InventoryPage() {
                             >
                               <td className="px-4 py-3 font-medium text-gray-900">{item.item_name || "—"}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand-deep to-brand-dark text-white font-bold shadow-md">
-                                  {item.total_count}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-center">
                                 <span
                                   className={`inline-flex h-10 w-10 items-center justify-center rounded-full font-bold shadow-sm transition-all duration-200 hover:scale-110 ${
                                     item.available_count > 0
@@ -156,33 +208,6 @@ export default function InventoryPage() {
                                 >
                                   {item.available_count}
                                 </span>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <span
-                                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full font-bold shadow-sm transition-all duration-200 hover:scale-110 ${
-                                    item.borrowed_count > 0
-                                      ? "bg-gradient-to-br from-amber-400 to-amber-600 text-white"
-                                      : "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-700"
-                                  }`}
-                                >
-                                  {item.borrowed_count}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                {item.borrowed_by.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {item.borrowed_by.map((borrower, idx) => (
-                                      <span
-                                        key={idx}
-                                        className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-200 transition-colors"
-                                      >
-                                        {borrower}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">—</span>
-                                )}
                               </td>
                             </tr>
                           ))}
@@ -197,23 +222,11 @@ export default function InventoryPage() {
           )}
         </div>
 
-        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3 fade-in">
-          <div className="rounded-2xl border-t-4 border-brand bg-white/95 backdrop-blur-sm p-6 shadow-lg hover:shadow-xl transition-shadow">
-            <p className="text-sm font-medium text-gray-500">Total Items</p>
-            <p className="mt-3 text-3xl font-bold text-brand-deep">
-              {inventory.reduce((sum, item) => sum + item.total_count, 0)}
-            </p>
-          </div>
+        <div className="mt-8 fade-in">
           <div className="rounded-2xl border-t-4 border-green-500 bg-white/95 backdrop-blur-sm p-6 shadow-lg hover:shadow-xl transition-shadow">
             <p className="text-sm font-medium text-gray-500">Available</p>
             <p className="mt-3 text-3xl font-bold text-green-700">
               {inventory.reduce((sum, item) => sum + item.available_count, 0)}
-            </p>
-          </div>
-          <div className="rounded-2xl border-t-4 border-amber-500 bg-white/95 backdrop-blur-sm p-6 shadow-lg hover:shadow-xl transition-shadow">
-            <p className="text-sm font-medium text-gray-500">Borrowed</p>
-            <p className="mt-3 text-3xl font-bold text-amber-700">
-              {inventory.reduce((sum, item) => sum + item.borrowed_count, 0)}
             </p>
           </div>
         </div>
