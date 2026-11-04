@@ -99,6 +99,9 @@ export async function GET() {
                   candidate.category !== asset.category ||
                   candidate.item_name !== asset.item_name
                 ) return false;
+                if (candidate.category === "electronics" && !candidate.serial_number?.trim()) {
+                  return false;
+                }
                 return !(reservationsByAsset.get(candidate.id) || [])
                   .some((requestId) => requestId !== request.id);
               })

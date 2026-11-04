@@ -61,6 +61,10 @@ BEGIN
     AND selected_asset.status IN ('new', 'in_use')
     AND selected_asset.category IS NOT DISTINCT FROM requested_asset.category
     AND selected_asset.item_name IS NOT DISTINCT FROM requested_asset.item_name
+    AND (
+      requested_asset.category IS DISTINCT FROM 'electronics'
+      OR NULLIF(BTRIM(selected_asset.serial_number), '') IS NOT NULL
+    )
     AND NOT EXISTS (
       SELECT 1 FROM asset_loans other_loan
       WHERE other_loan.asset_id = selected_asset.id

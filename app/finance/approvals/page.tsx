@@ -251,7 +251,7 @@ export default function FinancePage() {
 
         <section className="mb-10">
           <h2 className="mb-4 text-xl font-semibold text-brand-deep">
-            Approved borrow requests: select serial numbers
+            Manager-approved borrow requests: assign inventory by serial number
           </h2>
           {loanRequests.length === 0 ? (
             <div className="rounded-lg border-l-4 border-brand bg-white p-5 text-sm text-gray-500 shadow">
@@ -274,8 +274,8 @@ export default function FinancePage() {
                     {loanRequest.items.map((item, index) => (
                       <label key={item.id} className="grid gap-2 text-sm sm:grid-cols-[minmax(12rem,1fr)_2fr] sm:items-center">
                         <span className="text-gray-700">
-                          {item.asset?.item_name || "Requested item"} · {item.asset?.category || "other"}
-                          {item.asset?.serial_number ? ` · Current SN ${item.asset.serial_number}` : ""}
+                            {item.asset?.item_name || "Requested item"} · {item.asset?.category || "other"}
+                              {item.asset?.serial_number ? ` · Requested SN ${item.asset.serial_number}` : ""}
                         </span>
                         <select
                           value={loanSelections[loanRequest.id]?.[index] || ""}
@@ -286,7 +286,7 @@ export default function FinancePage() {
                           }}
                           className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
                         >
-                          <option value="">Select serial-numbered asset</option>
+                          <option value="">Assign an inventory unit</option>
                           {item.choices.map((choice) => (
                             <option
                               key={choice.id}
@@ -305,13 +305,13 @@ export default function FinancePage() {
                     ))}
                   </div>
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-gray-500">Saving confirms finance&apos;s item selection; admin confirms physical handover.</p>
+                    <p className="text-xs text-gray-500">Select one unit per item. Electronics require a serial number. Admin confirms physical handover.</p>
                     <button
                       onClick={() => saveLoanSelection(loanRequest)}
                       disabled={processing === `loan-${loanRequest.id}`}
                       className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                     >
-                      {processing === `loan-${loanRequest.id}` ? "Saving..." : "Save asset selection"}
+                      {processing === `loan-${loanRequest.id}` ? "Assigning..." : "Assign selected assets"}
                     </button>
                   </div>
                 </article>
