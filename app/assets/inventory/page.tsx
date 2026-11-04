@@ -31,7 +31,6 @@ export default function InventoryPage() {
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [locationFilter, setLocationFilter] = useState("all");
-  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/assets/inventory")
@@ -43,10 +42,6 @@ export default function InventoryPage() {
       .catch(() => {
         setLoading(false);
       });
-    fetch("/api/dashboard-role")
-      .then((res) => res.json())
-      .then((data) => setRole(data.role || null))
-      .catch(() => {});
   }, []);
 
   const filteredAssets = inventoryAssets.filter((asset) =>
@@ -144,7 +139,6 @@ export default function InventoryPage() {
                         <th className="px-4 py-3 font-semibold">Status</th>
                         <th className="px-4 py-3 font-semibold">Holder</th>
                         <th className="px-4 py-3 font-semibold">Location</th>
-                        {role === "worker" && <th className="px-4 py-3 font-semibold"></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -157,18 +151,6 @@ export default function InventoryPage() {
                           <td className="px-4 py-3 capitalize">{asset.status.replaceAll("_", " ")}</td>
                           <td className="px-4 py-3">{asset.current_holder || "—"}</td>
                           <td className="px-4 py-3">{asset.location || "—"}</td>
-                          {role === "worker" && (
-                            <td className="px-4 py-3">
-                              {asset.status === "available" && (
-                                <a
-                                  href={`/worker/new-request?mode=borrow&assetId=${asset.id}`}
-                                  className="whitespace-nowrap rounded bg-brand-deep px-3 py-2 text-xs font-medium text-white"
-                                >
-                                  Request to borrow
-                                </a>
-                              )}
-                            </td>
-                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -286,11 +268,7 @@ export default function InventoryPage() {
                                     <td className="px-4 py-2 pl-10">{asset.asset_tag} · {asset.serial_number || "No serial"}</td>
                                     <td className="px-4 py-2" colSpan={2}>{asset.location || "No location"}</td>
                                     <td className="px-4 py-2 capitalize">{asset.current_holder || asset.status.replaceAll("_", " ")}</td>
-                                    <td className="px-4 py-2">
-                                      {role === "worker" && asset.status === "available" ? (
-                                        <a href={`/worker/new-request?mode=borrow&assetId=${asset.id}`} className="text-brand-deep underline">Request to borrow</a>
-                                      ) : asset.status.replaceAll("_", " ")}
-                                    </td>
+                                    <td className="px-4 py-2 capitalize">{asset.status.replaceAll("_", " ")}</td>
                                   </tr>
                                 ))}
                               </tbody>

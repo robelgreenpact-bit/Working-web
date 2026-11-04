@@ -30,7 +30,7 @@ export async function GET() {
   const serviceClient = getServiceClient();
 
   if (role === "manager") {
-    const [approvalsRes, paymentsRes, assetLoansRes] = await Promise.all([
+    const [approvalsRes, paymentsRes] = await Promise.all([
       serviceClient
         .from("requests")
         .select("id", { count: "exact", head: true })
@@ -39,34 +39,21 @@ export async function GET() {
         .from("payment_requests")
         .select("id", { count: "exact", head: true })
         .eq("status", "pending_manager"),
-      serviceClient
-        .from("asset_loan_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "requested"),
     ]);
 
     return NextResponse.json({
-      approvals: (approvalsRes.count || 0) + (assetLoansRes.count || 0),
+      approvals: approvalsRes.count || 0,
       payments: paymentsRes.count || 0,
     });
   }
 
   if (role === "finance") {
-    const [financeRes, assetLoansRes] = await Promise.all([
-      serviceClient
-        .from("requests")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending_finance"),
-      serviceClient
-        .from("asset_loan_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "approved")
-        .is("finance_selected_at", null),
-    ]);
+    const financeRes = await serviceClient
+      .from("requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending_finance");
 
-    return NextResponse.json({
-      finance: (financeRes.count || 0) + (assetLoansRes.count || 0),
-    });
+    return NextResponse.json({ finance: financeRes.count || 0 });
   }
 
   if (role === "admin") {

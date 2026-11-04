@@ -127,132 +127,6 @@ CREATE POLICY asset_loans_read_access ON asset_loans
     )
   );
 
-CREATE OR REPLACE FUNCTION create_asset_loan_request(
-  p_asset_ids UUID[],
-  p_purpose TEXT,
-  p_due_date DATE
-) RETURNS UUID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  requester UUID := auth.uid();
-  new_request_id UUID;
-  available_count INTEGER;
-BEGIN
-  IF requester IS NULL THEN
-    RAISE EXCEPTION 'Authentication required';
-  END IF;
-  IF COALESCE(BTRIM(p_purpose), '') = '' THEN
-    RAISE EXCEPTION 'Purpose is required';
-  END IF;
-  IF p_due_date IS NULL OR p_due_date < CURRENT_DATE THEN
-    RAISE EXCEPTION 'A due date today or later is required';
-  END IF;
-  IF p_asset_ids IS NULL OR CARDINALITY(p_asset_ids) = 0 THEN
-    RAISE EXCEPTION 'Select at least one asset';
-  END IF;
-  IF CARDINALITY(ARRAY(SELECT DISTINCT unnest(p_asset_ids))) <> CARDINALITY(p_asset_ids) THEN
-    RAISE EXCEPTION 'Duplicate assets are not allowed';
-  END IF;
-
-  SELECT COUNT(*) INTO available_count
-  FROM assets
-  WHERE id = ANY(p_asset_ids)
-    AND borrowed_by IS NULL
-    AND assigned_to IS NULL
-    AND status IN ('new', 'in_use');
-
-  IF available_count <> CARDINALITY(p_asset_ids) THEN
-    RAISE EXCEPTION 'One or more selected assets are no longer available';
-  END IF;
-
-  INSERT INTO asset_loan_requests (requester_id, purpose, due_date)
-  VALUES (requester, BTRIM(p_purpose), p_due_date)
-  RETURNING id INTO new_request_id;
-
-  INSERT INTO asset_loans (request_id, asset_id, borrower_id, due_date)
-  SELECT new_request_id, selected_asset_id, requester, p_due_date
-  FROM UNNEST(p_asset_ids) AS selected_asset(selected_asset_id);
-
-  RETURN new_request_id;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION decide_asset_loan_request(
-  p_request_id UUID,
-  p_decision TEXT,
-  p_comment TEXT DEFAULT NULL
-) RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  actor UUID := auth.uid();
-  loan_request asset_loan_requests%ROWTYPE;
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM public_users
-    WHERE id = actor AND role = 'manager'
-  ) THEN
-    RAISE EXCEPTION 'Only managers can decide loan requests';
-  END IF;
-  IF p_decision NOT IN ('approved', 'rejected') THEN
-    RAISE EXCEPTION 'Invalid decision';
-  END IF;
-
-  SELECT * INTO loan_request
-  FROM asset_loan_requests
-  WHERE id = p_request_id
-  FOR UPDATE;
-  IF NOT FOUND OR loan_request.status <> 'requested' THEN
-    RAISE EXCEPTION 'Loan request is no longer awaiting approval';
-  END IF;
-
-  UPDATE asset_loan_requests
-  SET status = p_decision,
-      manager_id = actor,
-      manager_decision_at = NOW(),
-      manager_comment = NULLIF(BTRIM(p_comment), '')
-  WHERE id = p_request_id;
-
-  UPDATE asset_loans SET status = p_decision WHERE request_id = p_request_id;
-
-  IF p_decision = 'approved' THEN
-    INSERT INTO notifications (user_id, type, title, message, link, metadata)
-    VALUES (
-      loan_request.requester_id,
-      'asset_loan_approved',
-      'Borrow request approved',
-      'Your borrow request was approved and is awaiting handover.',
-      '/worker',
-      jsonb_build_object('loan_request_id', p_request_id)
-    );
-    INSERT INTO notifications (user_id, type, title, message, link, metadata)
-    SELECT id,
-           'asset_loan_handover_pending',
-           'Approved assets need handover',
-           'A borrow request was approved and is awaiting asset handover.',
-           '/assets',
-           jsonb_build_object('loan_request_id', p_request_id)
-    FROM public_users
-    WHERE role = 'admin';
-  ELSE
-    INSERT INTO notifications (user_id, type, title, message, link, metadata)
-    VALUES (
-      loan_request.requester_id,
-      'asset_loan_rejected',
-      'Borrow request rejected',
-      'Your borrow request was rejected.',
-      '/worker',
-      jsonb_build_object('loan_request_id', p_request_id)
-    );
-  END IF;
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION issue_asset_loan_request(p_request_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -442,13 +316,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION create_asset_loan_request(UUID[], TEXT, DATE) FROM PUBLIC;
-REVOKE ALL ON FUNCTION decide_asset_loan_request(UUID, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION issue_asset_loan_request(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION request_asset_loan_return(UUID, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION confirm_asset_loan_return(UUID, TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION create_asset_loan_request(UUID[], TEXT, DATE) TO authenticated;
-GRANT EXECUTE ON FUNCTION decide_asset_loan_request(UUID, TEXT, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION issue_asset_loan_request(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION request_asset_loan_return(UUID, TEXT, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION confirm_asset_loan_return(UUID, TEXT, TEXT) TO authenticated;

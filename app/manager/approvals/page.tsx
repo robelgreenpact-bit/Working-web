@@ -35,22 +35,6 @@ type HistoryRow = RequestRow & {
   }[];
 };
 
-type AssetLoanRequest = {
-  id: string;
-  purpose: string;
-  due_date: string;
-  created_at: string;
-  requester: { name: string; email: string } | null;
-  items: {
-    id: string;
-    asset: {
-      asset_tag: string;
-      item_name: string | null;
-      serial_number: string | null;
-    } | null;
-  }[];
-};
-
 function daysAgo(dateStr: string) {
   const days = Math.floor(
     (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24),
@@ -111,7 +95,6 @@ export default function ManagerApprovalsPage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<HistoryRow[]>([]);
-  const [loanRequests, setLoanRequests] = useState<AssetLoanRequest[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>(
     {},
@@ -133,12 +116,6 @@ export default function ManagerApprovalsPage() {
     setHistoryLoading(false);
   };
 
-  const loadLoanRequests = async () => {
-    const res = await fetch("/api/manager/asset-loans");
-    const data = await res.json();
-    setLoanRequests(data.requests || []);
-  };
-
   useEffect(() => {
     fetch("/api/manager/requests")
       .then((res) => res.json())
@@ -152,9 +129,6 @@ export default function ManagerApprovalsPage() {
         setHistory(data.requests || []);
         setHistoryLoading(false);
       });
-    fetch("/api/manager/asset-loans")
-      .then((res) => res.json())
-      .then((data) => setLoanRequests(data.requests || []));
   }, []);
 
   const handleDecision = async (
@@ -183,25 +157,6 @@ export default function ManagerApprovalsPage() {
     loadHistory();
   };
 
-  const handleLoanDecision = async (
-    id: string,
-    decision: "approved" | "rejected",
-  ) => {
-    setProcessing(id);
-    const res = await fetch(`/api/manager/asset-loans/${id}/decide`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, comment: commentDrafts[id] || "" }),
-    });
-    const data = await res.json();
-    setProcessing(null);
-    if (!res.ok) {
-      alert(data.error || "Failed to submit borrow decision");
-      return;
-    }
-    loadLoanRequests();
-  };
-
   return (
     <div>
       <Navbar title="Approvals" />
@@ -209,62 +164,6 @@ export default function ManagerApprovalsPage() {
         <h1 className="mb-6 text-2xl font-bold text-brand-deep">
           Pending Approvals
         </h1>
-
-        <section className="mb-10">
-          <h2 className="mb-4 text-xl font-semibold text-brand-deep">Borrow Requests</h2>
-          {loanRequests.length === 0 ? (
-            <div className="rounded-lg border-l-4 border-brand bg-white p-5 text-sm text-gray-500 shadow">
-              No borrow requests waiting for approval.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {loanRequests.map((request) => (
-                <article key={request.id} className="rounded-lg border-l-4 border-brand bg-white p-5 shadow">
-                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{request.purpose}</h3>
-                      <p className="text-sm text-gray-500">
-                        From {request.requester?.name || "Unknown"} ({request.requester?.email || ""})
-                      </p>
-                    </div>
-                    <p className="text-sm text-gray-500">Due {request.due_date}</p>
-                  </div>
-                  <ul className="mb-4 space-y-1 text-sm text-gray-700">
-                    {request.items.map((item) => (
-                      <li key={item.id}>
-                        {item.asset?.item_name || "Asset"} · {item.asset?.asset_tag || "No tag"}
-                        {item.asset?.serial_number ? ` · SN ${item.asset.serial_number}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                  <textarea
-                    placeholder="Optional comment..."
-                    value={commentDrafts[request.id] || ""}
-                    onChange={(e) => setCommentDrafts({ ...commentDrafts, [request.id]: e.target.value })}
-                    rows={2}
-                    className="mb-3 w-full rounded border border-gray-300 p-2 text-sm text-gray-900"
-                  />
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handleLoanDecision(request.id, "approved")}
-                      disabled={processing === request.id}
-                      className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleLoanDecision(request.id, "rejected")}
-                      disabled={processing === request.id}
-                      className="rounded bg-red-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
 
         {loading ? (
           <p className="text-gray-500">Loading...</p>

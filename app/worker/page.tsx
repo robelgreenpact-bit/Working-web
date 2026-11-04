@@ -118,7 +118,7 @@ export default function WorkerPage() {
       <div className="mx-auto max-w-4xl p-8">
         {loanRequests.length > 0 && (
           <div className="mb-6 rounded-lg border-t-4 border-brand bg-white p-6 shadow">
-            <h2 className="mb-3 text-lg font-semibold text-brand-deep">My Borrow Requests</h2>
+            <h2 className="mb-3 text-lg font-semibold text-brand-deep">Items lent to me</h2>
             <div className="space-y-4">
               {loanRequests.map((request) => (
                 <section key={request.id} className="rounded border border-gray-200 p-4">

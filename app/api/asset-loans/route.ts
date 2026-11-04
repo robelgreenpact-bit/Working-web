@@ -36,35 +36,3 @@ export async function GET() {
 
   return NextResponse.json({ requests: loans });
 }
-
-export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await request.json();
-  const { asset_ids, purpose, due_date } = body;
-  if (!Array.isArray(asset_ids) || !purpose || !due_date) {
-    return NextResponse.json(
-      { error: "Select assets, provide a purpose, and choose a due date" },
-      { status: 400 },
-    );
-  }
-
-  const { data, error } = await supabase.rpc("create_asset_loan_request", {
-    p_asset_ids: asset_ids,
-    p_purpose: purpose,
-    p_due_date: due_date,
-  });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 409 });
-  }
-
-  return NextResponse.json({ request_id: data });
-}
