@@ -237,16 +237,15 @@ export default function FinancePage() {
     decision: "approved" | "rejected",
   ) => {
     const requestRow = requests.find((request) => request.id === id);
-    const isDurable = Boolean(requestRow && ["electronics", "physical_good", "other_asset"].includes(requestRow.type));
+    const isElectronics = requestRow?.type === "electronics";
     const selections = purchaseSelections[id] || [];
-    if (decision === "approved" && isDurable) {
+    if (decision === "approved" && isElectronics) {
       const expectedQuantity = Math.max(1, requestRow?.quantity || 1);
       if (selections.length !== expectedQuantity || selections.some((selection) => !selection)) {
-        alert("Select an inventory unit or mark each unit as needs purchase.");
+        alert("Select one available inventory unit for every requested tablet or PC.");
         return;
       }
-      const selectedIds = selections.filter((selection) => selection !== "purchase");
-      if (new Set(selectedIds).size !== selectedIds.length) {
+      if (new Set(selections).size !== selections.length) {
         alert("Select a different inventory unit for each requested item.");
         return;
       }
@@ -264,9 +263,11 @@ export default function FinancePage() {
         decision,
         comment: commentDrafts[id] || "",
         forTaxRegistry: taxRegistryChoice[id] || false,
-        assetIds: selections.filter((selection) => selection !== "purchase"),
+        assetIds: isElectronics && decision === "approved" ? selections : [],
         fulfillmentMode: purchaseModes[id] || "assign",
-        purchaseQuantity: selections.filter((selection) => selection === "purchase").length,
+        purchaseQuantity: requestRow && ["physical_good", "other_asset"].includes(requestRow.type)
+          ? Math.max(1, requestRow.quantity || 1)
+          : 0,
         dueDate: purchaseDueDates[id] || null,
       }),
     });
@@ -371,7 +372,7 @@ export default function FinancePage() {
                   </p>
                 )}
 
-                {["electronics", "physical_good", "other_asset"].includes(r.type) && (
+                {r.type === "electronics" && (
                   <section className="mb-4 rounded border border-gray-200 bg-gray-50 p-4">
                     <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                       <div>
@@ -386,17 +387,6 @@ export default function FinancePage() {
                         {compatibleAssets(r).length} matching units available
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setPurchaseSelections({
-                        ...purchaseSelections,
-                        [r.id]: Array(Math.max(1, r.quantity || 1)).fill("purchase"),
-                      })}
-                      className="mb-3 rounded bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900 hover:bg-amber-200"
-                    >
-                      Mark all as needs purchase
-                    </button>
-
                     <div className="space-y-3">
                       {Array.from({ length: Math.max(1, r.quantity || 1) }, (_, unitIndex) => {
                         const searchKey = `${r.id}-${unitIndex}`;
@@ -427,7 +417,6 @@ export default function FinancePage() {
                               className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
                             >
                               <option value="">Select available unit</option>
-                              <option value="purchase">Needs purchase</option>
                               {candidates.map((asset) => (
                                 <option
                                   key={asset.id}
@@ -540,11 +529,11 @@ export default function FinancePage() {
                   <button
                     onClick={() => handleDecision(r.id, "approved")}
                     disabled={processing === r.id || (
-                      ["electronics", "physical_good", "other_asset"].includes(r.type) &&
+                      r.type === "electronics" &&
                       ((purchaseSelections[r.id] || []).length !== Math.max(1, r.quantity || 1) ||
                         (purchaseSelections[r.id] || []).some((selection) => !selection) ||
-                        ((purchaseSelections[r.id] || []).some(Boolean) &&
-                          purchaseModes[r.id] === "lend" && !purchaseDueDates[r.id]))
+                        new Set(purchaseSelections[r.id] || []).size !== Math.max(1, r.quantity || 1) ||
+                        (purchaseModes[r.id] === "lend" && !purchaseDueDates[r.id]))
                     )}
                     className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
                   >

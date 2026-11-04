@@ -84,8 +84,8 @@ export async function POST(request: Request) {
   ) {
     return NextResponse.json({ error: "Invalid asset category" }, { status: 400 });
   }
-  if (type === "electronics" && !["tablet", "pc", "other"].includes(electronicsSubcategory)) {
-    return NextResponse.json({ error: "Select an electronics type" }, { status: 400 });
+  if (type === "electronics" && !["tablet", "pc"].includes(electronicsSubcategory)) {
+    return NextResponse.json({ error: "Electronics requests must specify Tablet or PC" }, { status: 400 });
   }
   if (needsAssetDetails && !itemName?.trim()) {
     return NextResponse.json({ error: "Item name is required for asset requests" }, { status: 400 });

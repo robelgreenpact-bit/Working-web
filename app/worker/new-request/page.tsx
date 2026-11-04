@@ -285,7 +285,6 @@ export default function NewRequestPage() {
                 <option value="furniture">Furniture</option>
                 <option value="vehicle">Vehicle</option>
                 <option value="office_supplies">Office supplies</option>
-                <option value="other">Other</option>
               </select>
             </div>
           )}

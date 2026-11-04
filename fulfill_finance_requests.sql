@@ -137,9 +137,12 @@ BEGIN
   IF request_row.type IN ('electronics', 'physical_good', 'other_asset') THEN
     required_count := GREATEST(COALESCE(request_row.quantity, 1), 1);
     selected_count := COALESCE(CARDINALITY(p_asset_ids), 0);
-    IF p_purchase_quantity IS NULL OR p_purchase_quantity < 0
-      OR selected_count + p_purchase_quantity <> required_count THEN
-      RAISE EXCEPTION 'Assign an inventory unit or mark as needs purchase for each requested item';
+    IF request_row.type = 'electronics' THEN
+      IF selected_count <> required_count OR COALESCE(p_purchase_quantity, 0) <> 0 THEN
+        RAISE EXCEPTION 'Select one inventory unit for every requested tablet or PC';
+      END IF;
+    ELSIF selected_count <> 0 OR COALESCE(p_purchase_quantity, -1) <> required_count THEN
+      RAISE EXCEPTION 'Non-electronics durable requests must use the purchase fulfillment flow';
     END IF;
     IF p_fulfillment_mode NOT IN ('assign', 'lend') THEN
       RAISE EXCEPTION 'Choose Assign or Lend for the requested units';
