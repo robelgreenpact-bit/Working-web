@@ -35,6 +35,28 @@ type HistoryRow = RequestRow & {
   }[];
 };
 
+type LoanChoice = {
+  id: string;
+  asset_tag: string;
+  item_name: string | null;
+  category: string | null;
+  serial_number: string | null;
+  location: string | null;
+};
+
+type FinanceLoanRequest = {
+  id: string;
+  purpose: string;
+  due_date: string | null;
+  requester: { name: string; email: string } | null;
+  items: {
+    id: string;
+    asset_id: string;
+    asset: LoanChoice | null;
+    choices: LoanChoice[];
+  }[];
+};
+
 function daysAgo(dateStr: string) {
   const days = Math.floor(
     (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24),
@@ -95,6 +117,8 @@ export default function FinancePage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [loanRequests, setLoanRequests] = useState<FinanceLoanRequest[]>([]);
+  const [loanSelections, setLoanSelections] = useState<Record<string, string[]>>({});
   const [historyLoading, setHistoryLoading] = useState(true);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>(
     {},
@@ -119,6 +143,44 @@ export default function FinancePage() {
     setHistoryLoading(false);
   };
 
+  const loadLoanRequests = async () => {
+    const res = await fetch("/api/finance/asset-loans");
+    const data = await res.json();
+    const nextRequests: FinanceLoanRequest[] = data.requests || [];
+    setLoanRequests(nextRequests);
+    setLoanSelections((current) => {
+      const next = { ...current };
+      for (const loanRequest of nextRequests) {
+        if (!next[loanRequest.id]) {
+          next[loanRequest.id] = loanRequest.items.map((item) => item.asset_id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const saveLoanSelection = async (loanRequest: FinanceLoanRequest) => {
+    const assetIds = loanSelections[loanRequest.id] || [];
+    if (assetIds.length !== loanRequest.items.length || assetIds.some((id) => !id)) {
+      alert("Select an asset for every requested item.");
+      return;
+    }
+
+    setProcessing(`loan-${loanRequest.id}`);
+    const res = await fetch(`/api/finance/asset-loans/${loanRequest.id}/select`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ asset_ids: assetIds }),
+    });
+    const data = await res.json();
+    setProcessing(null);
+    if (!res.ok) {
+      alert(data.error || "Failed to save asset selection");
+      return;
+    }
+    await loadLoanRequests();
+  };
+
   useEffect(() => {
     fetch("/api/finance/requests")
       .then((res) => res.json())
@@ -131,6 +193,20 @@ export default function FinancePage() {
       .then((data) => {
         setHistory(data.requests || []);
         setHistoryLoading(false);
+      });
+    fetch("/api/finance/asset-loans")
+      .then((res) => res.json())
+      .then((data) => {
+        const nextRequests = data.requests || [];
+        setLoanRequests(nextRequests);
+        setLoanSelections(
+          Object.fromEntries(
+            nextRequests.map((loanRequest: FinanceLoanRequest) => [
+              loanRequest.id,
+              loanRequest.items.map((item) => item.asset_id),
+            ]),
+          ),
+        );
       });
   }, []);
 
@@ -172,6 +248,77 @@ export default function FinancePage() {
         <h1 className="mb-6 text-2xl font-bold text-brand-deep">
           Pending Final Approval
         </h1>
+
+        <section className="mb-10">
+          <h2 className="mb-4 text-xl font-semibold text-brand-deep">
+            Approved borrow requests: select serial numbers
+          </h2>
+          {loanRequests.length === 0 ? (
+            <div className="rounded-lg border-l-4 border-brand bg-white p-5 text-sm text-gray-500 shadow">
+              No approved borrow requests are waiting for asset selection.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {loanRequests.map((loanRequest) => (
+                <article key={loanRequest.id} className="rounded-lg border-l-4 border-brand bg-white p-5 shadow">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{loanRequest.purpose}</h3>
+                      <p className="text-sm text-gray-500">
+                        {loanRequest.requester?.name || "Requester"} ({loanRequest.requester?.email || ""})
+                      </p>
+                    </div>
+                    <p className="text-sm text-gray-500">Due {loanRequest.due_date || "—"}</p>
+                  </div>
+                  <div className="space-y-3">
+                    {loanRequest.items.map((item, index) => (
+                      <label key={item.id} className="grid gap-2 text-sm sm:grid-cols-[minmax(12rem,1fr)_2fr] sm:items-center">
+                        <span className="text-gray-700">
+                          {item.asset?.item_name || "Requested item"} · {item.asset?.category || "other"}
+                          {item.asset?.serial_number ? ` · Current SN ${item.asset.serial_number}` : ""}
+                        </span>
+                        <select
+                          value={loanSelections[loanRequest.id]?.[index] || ""}
+                          onChange={(e) => {
+                            const nextSelections = [...(loanSelections[loanRequest.id] || [])];
+                            nextSelections[index] = e.target.value;
+                            setLoanSelections({ ...loanSelections, [loanRequest.id]: nextSelections });
+                          }}
+                          className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                        >
+                          <option value="">Select serial-numbered asset</option>
+                          {item.choices.map((choice) => (
+                            <option
+                              key={choice.id}
+                              value={choice.id}
+                              disabled={(loanSelections[loanRequest.id] || []).some(
+                                (selectedId, selectedIndex) => selectedId === choice.id && selectedIndex !== index,
+                              )}
+                            >
+                              {choice.item_name || "Unnamed"} · {choice.asset_tag}
+                              {choice.serial_number ? ` · SN: ${choice.serial_number}` : " · No serial"}
+                              {choice.location ? ` · ${choice.location}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-gray-500">Saving confirms finance&apos;s item selection; admin confirms physical handover.</p>
+                    <button
+                      onClick={() => saveLoanSelection(loanRequest)}
+                      disabled={processing === `loan-${loanRequest.id}`}
+                      className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      {processing === `loan-${loanRequest.id}` ? "Saving..." : "Save asset selection"}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
 
         {loading ? (
           <p className="text-gray-500">Loading...</p>

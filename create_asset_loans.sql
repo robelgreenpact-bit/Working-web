@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS asset_loan_requests (
   manager_id UUID REFERENCES auth.users(id),
   manager_decision_at TIMESTAMPTZ,
   manager_comment TEXT,
+  finance_selected_by UUID REFERENCES auth.users(id),
+  finance_selected_at TIMESTAMPTZ,
   issued_by UUID REFERENCES auth.users(id),
   issued_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -275,6 +277,9 @@ BEGIN
   FOR UPDATE;
   IF NOT FOUND OR loan_request.status <> 'approved' THEN
     RAISE EXCEPTION 'Loan request is not approved or was already issued';
+  END IF;
+  IF loan_request.finance_selected_at IS NULL THEN
+    RAISE EXCEPTION 'Finance must select the asset serial numbers before handover';
   END IF;
 
   SELECT COUNT(*) INTO expected_count

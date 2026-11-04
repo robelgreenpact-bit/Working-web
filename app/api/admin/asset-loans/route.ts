@@ -66,7 +66,9 @@ export async function GET() {
   }));
 
   return NextResponse.json({
-    handovers: rows.filter((request) => request.status === "approved"),
+    handovers: rows.filter(
+      (request) => request.status === "approved" && request.finance_selected_at,
+    ),
     returns: rows.flatMap((request) =>
       request.items
         .filter((loan: { status: string }) => loan.status === "return_requested")
