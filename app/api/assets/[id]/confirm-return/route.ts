@@ -22,22 +22,27 @@ export async function POST(
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["admin", "finance"].includes(profile.role)) {
+  if (profile?.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { error } = await supabase
-    .from("assets")
-    .update({
-      borrowed_by: null,
-      borrowed_at: null,
-      return_requested: false,
-      return_requested_at: null,
-    })
-    .eq("id", id);
+  const { data: loan, error: loanError } = await supabase
+    .from("asset_loans")
+    .select("id, return_condition")
+    .eq("asset_id", id)
+    .eq("status", "return_requested")
+    .single();
+  if (loanError || !loan) {
+    return NextResponse.json({ error: "No pending loan return found for this asset" }, { status: 404 });
+  }
 
+  const { error } = await supabase.rpc("confirm_asset_loan_return", {
+    p_loan_id: loan.id,
+    p_return_condition: loan.return_condition || "good",
+    p_note: null,
+  });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 409 });
   }
 
   return NextResponse.json({ success: true });

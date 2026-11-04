@@ -16,11 +16,24 @@ const handleDownload = (requestId: string) => {
   window.open(`/api/requests/${requestId}/download`, "_blank");
 };
 
-type BorrowedAsset = {
+type LoanItem = {
   id: string;
-  asset_tag: string;
-  item_name: string | null;
-  return_requested: boolean;
+  status: string;
+  due_date: string | null;
+  return_condition: string | null;
+  asset: {
+    asset_tag: string;
+    item_name: string | null;
+    serial_number: string | null;
+  } | null;
+};
+
+type LoanRequest = {
+  id: string;
+  purpose: string;
+  due_date: string | null;
+  status: string;
+  items: LoanItem[];
 };
 
 const statusLabels: Record<string, string> = {
@@ -50,7 +63,9 @@ const statusColors: Record<string, string> = {
 export default function WorkerPage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [borrowedAssets, setBorrowedAssets] = useState<BorrowedAsset[]>([]);
+  const [loanRequests, setLoanRequests] = useState<LoanRequest[]>([]);
+  const [returnConditions, setReturnConditions] = useState<Record<string, string>>({});
+  const [returnNotes, setReturnNotes] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/requests")
@@ -60,57 +75,99 @@ export default function WorkerPage() {
         setLoading(false);
       });
 
-    fetch("/api/assets/my-borrowed")
+    fetch("/api/asset-loans")
       .then((res) => res.json())
-      .then((data) => setBorrowedAssets(data.assets || []))
+      .then((data) => setLoanRequests(data.requests || []))
       .catch(() => {});
   }, []);
 
-  const handleRequestReturn = async (assetId: string) => {
-    const res = await fetch(`/api/assets/${assetId}/return-request`, {
+  const handleRequestReturn = async (loanId: string) => {
+    const res = await fetch(`/api/asset-loans/${loanId}/return`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        return_condition: returnConditions[loanId] || "",
+        note: returnNotes[loanId] || "",
+      }),
     });
     const data = await res.json();
     if (!res.ok) {
       alert(data.error || "Failed to request return");
       return;
     }
-    fetch("/api/assets/my-borrowed")
+    fetch("/api/asset-loans")
       .then((r) => r.json())
-      .then((d) => setBorrowedAssets(d.assets || []));
+      .then((d) => setLoanRequests(d.requests || []));
   };
 
   return (
     <div>
       <Navbar title="Worker Dashboard" />
       <div className="mx-auto max-w-4xl p-8">
-        {borrowedAssets.length > 0 && (
+        {loanRequests.length > 0 && (
           <div className="mb-6 rounded-lg border-t-4 border-brand bg-white p-6 shadow">
-            <h2 className="mb-3 text-lg font-semibold text-brand-deep">
-              Items You&apos;ve Borrowed
-            </h2>
-            <div className="space-y-2">
-              {borrowedAssets.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center justify-between rounded border border-gray-200 p-3 text-sm"
-                >
-                  <span>
-                    {a.item_name} ({a.asset_tag})
-                  </span>
-                  {a.return_requested ? (
-                    <span className="text-xs text-amber-700">
-                      Return requested — awaiting confirmation
+            <h2 className="mb-3 text-lg font-semibold text-brand-deep">My Borrow Requests</h2>
+            <div className="space-y-4">
+              {loanRequests.map((request) => (
+                <section key={request.id} className="rounded border border-gray-200 p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-gray-900">{request.purpose}</p>
+                    <span className="rounded bg-gray-100 px-2 py-1 text-xs capitalize text-gray-700">
+                      {request.status.replaceAll("_", " ")}
                     </span>
-                  ) : (
-                    <button
-                      onClick={() => handleRequestReturn(a.id)}
-                      className="rounded bg-brand-deep px-3 py-1 text-xs font-medium text-white transition hover:bg-brand-dark"
-                    >
-                      I Returned This
-                    </button>
-                  )}
-                </div>
+                  </div>
+                  <p className="mb-3 text-xs text-gray-500">
+                    Expected return: {request.due_date || "Not recorded for this legacy loan"}
+                  </p>
+                  <div className="space-y-3">
+                    {request.items.map((loan) => (
+                      <div key={loan.id} className="rounded border border-gray-100 p-3 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span>
+                            {loan.asset?.item_name || "Asset"} ({loan.asset?.asset_tag || "No tag"})
+                            {loan.asset?.serial_number ? ` · SN ${loan.asset.serial_number}` : ""}
+                          </span>
+                          <span className="text-xs capitalize text-gray-500">
+                            {loan.status.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        {loan.status === "return_requested" ? (
+                          <p className="mt-2 text-xs text-amber-700">Return awaiting confirmation</p>
+                        ) : (loan.status === "issued" || loan.status === "overdue") ? (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-[10rem_1fr_auto]">
+                            <select
+                              required
+                              aria-label="Return condition"
+                              value={returnConditions[loan.id] || ""}
+                              onChange={(e) => setReturnConditions({ ...returnConditions, [loan.id]: e.target.value })}
+                              className="rounded border border-gray-300 p-2 text-sm text-gray-900"
+                            >
+                              <option value="">Condition</option>
+                              <option value="good">Good</option>
+                              <option value="damaged">Damaged</option>
+                              <option value="lost">Lost</option>
+                            </select>
+                            <input
+                              type="text"
+                              aria-label="Return note"
+                              placeholder="Optional return note"
+                              value={returnNotes[loan.id] || ""}
+                              onChange={(e) => setReturnNotes({ ...returnNotes, [loan.id]: e.target.value })}
+                              className="rounded border border-gray-300 p-2 text-sm text-gray-900"
+                            />
+                            <button
+                              onClick={() => handleRequestReturn(loan.id)}
+                              disabled={!returnConditions[loan.id]}
+                              className="rounded bg-brand-deep px-3 py-2 text-xs font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
+                            >
+                              Request return
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           </div>

@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-function generateAssetTag() {
-  const random = Math.floor(100000 + Math.random() * 900000);
-  return `AST-${random}`;
-}
+import { generateAssetTag } from "@/lib/assets";
 
 export async function POST(
   request: Request,
@@ -21,8 +17,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { decision, comment, issueFromInventory, assetIds, forTaxRegistry } =
-    await request.json();
+  const { decision, comment, forTaxRegistry } = await request.json();
 
   if (!decision || !["approved", "rejected"].includes(decision)) {
     return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
@@ -72,31 +67,23 @@ export async function POST(
   // If approved AND it's a durable/physical item, either issue from inventory or create a new asset
   const durableTypes = ["physical_good", "other_asset", "electronics"];
   if (decision === "approved" && durableTypes.includes(reqData.type)) {
-    if (issueFromInventory && assetIds && assetIds.length > 0) {
-      // Issue assets from inventory based on selection
-      const { error: issueError } = await supabase
-        .from("assets")
-        .update({
-          borrowed_by: reqData.requester_id,
-          borrowed_at: new Date().toISOString(),
-        })
-        .eq("id", assetIds[0])
-        .is("borrowed_by", null);
-
-      if (issueError) {
-        return NextResponse.json({
-          success: true,
-          warning: "Request approved but issuing from inventory failed: " + issueError.message,
-        });
-      }
-    } else {
+    const category = reqData.asset_category ||
+      (reqData.type === "electronics" ? "electronics" : "other");
+    const itemName = reqData.item_name || reqData.title;
+    const quantity = Math.max(1, Number(reqData.quantity) || 1);
+    for (let index = 0; index < quantity; index++) {
+      const assetTag = await generateAssetTag(supabase, category);
       const { error: assetError } = await supabase.from("assets").insert({
         request_id: id,
-        asset_tag: generateAssetTag(),
+        asset_tag: assetTag,
+        category,
+        item_name: itemName,
+        electronics_subcategory: reqData.electronics_subcategory || null,
         assigned_to: reqData.requester_id,
         purchase_cost: reqData.estimated_cost,
         purchase_date: new Date().toISOString().split("T")[0],
         status: "in_use",
+        quantity: 1,
       });
 
       if (assetError) {

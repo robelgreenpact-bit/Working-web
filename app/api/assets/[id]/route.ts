@@ -44,6 +44,32 @@ export async function PATCH(
     if (field in body) updates[field] = body[field];
   }
 
+  if ("status" in updates || "assigned_to" in updates) {
+    const { data: asset } = await supabase
+      .from("assets")
+      .select("borrowed_by")
+      .eq("id", id)
+      .single();
+    if (asset?.borrowed_by) {
+      return NextResponse.json(
+        { error: "Return the borrowed asset before changing its condition or holder" },
+        { status: 409 },
+      );
+    }
+    const { data: openLoans } = await supabase
+      .from("asset_loans")
+      .select("id")
+      .eq("asset_id", id)
+      .in("status", ["requested", "approved", "issued", "return_requested"])
+      .limit(1);
+    if (openLoans?.length) {
+      return NextResponse.json(
+        { error: "Resolve the open borrow request before changing this asset" },
+        { status: 409 },
+      );
+    }
+  }
+
   const { error } = await supabase.from("assets").update(updates).eq("id", id);
 
   if (error) {
@@ -76,6 +102,46 @@ export async function DELETE(
 
   if (!profile || !["admin", "finance"].includes(profile.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { data: asset, error: assetError } = await supabase
+    .from("assets")
+    .select("borrowed_by")
+    .eq("id", id)
+    .single();
+  if (assetError || !asset) {
+    return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+  }
+  if (asset.borrowed_by) {
+    return NextResponse.json(
+      { error: "Borrowed assets cannot be deleted" },
+      { status: 409 },
+    );
+  }
+
+  const { data: openLoans } = await supabase
+    .from("asset_loans")
+    .select("id")
+    .eq("asset_id", id)
+    .in("status", ["requested", "approved", "issued", "return_requested"])
+    .limit(1);
+  if (openLoans?.length) {
+    return NextResponse.json(
+      { error: "Assets with open borrow requests cannot be deleted" },
+      { status: 409 },
+    );
+  }
+
+  const { data: loanHistory } = await supabase
+    .from("asset_loans")
+    .select("id")
+    .eq("asset_id", id)
+    .limit(1);
+  if (loanHistory?.length) {
+    return NextResponse.json(
+      { error: "Assets with loan history cannot be deleted; retire the asset instead" },
+      { status: 409 },
+    );
   }
 
   const { error } = await supabase.from("assets").delete().eq("id", id);

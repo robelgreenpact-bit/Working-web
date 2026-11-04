@@ -27,6 +27,32 @@ type UserOption = {
   name: string;
 };
 
+type LoanQueueRequest = {
+  id: string;
+  purpose: string;
+  requester: { name: string; email: string } | null;
+  items: {
+    id: string;
+    asset_id: string;
+    status: string;
+    due_date: string | null;
+    borrowed_at: string | null;
+    returned_at: string | null;
+    return_condition: string | null;
+    return_note: string | null;
+    asset: {
+      asset_tag: string;
+      item_name: string | null;
+      serial_number: string | null;
+      location?: string | null;
+    } | null;
+  }[];
+};
+
+type PendingReturn = Omit<LoanQueueRequest, "items"> & {
+  item: LoanQueueRequest["items"][number];
+};
+
 const statusColors: Record<string, string> = {
   new: "bg-blue-100 text-blue-800",
   in_use: "bg-green-100 text-green-800",
@@ -39,9 +65,18 @@ export default function AssetsPage() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [role, setRole] = useState<string | null>(null);
+  const [pendingHandovers, setPendingHandovers] = useState<LoanQueueRequest[]>([]);
+  const [pendingReturns, setPendingReturns] = useState<PendingReturn[]>([]);
+  const [loanHistory, setLoanHistory] = useState<PendingReturn[]>([]);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [returnConditions, setReturnConditions] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [registryTab, setRegistryTab] = useState("all");
+  const [assetSearch, setAssetSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
@@ -59,15 +94,38 @@ export default function AssetsPage() {
   });
 
   const loadAssets = async () => {
-    setLoading(true);
     const res = await fetch("/api/assets");
     const data = await res.json();
     setAssets(data.assets || []);
     setLoading(false);
   };
 
+  const loadLoanQueue = async () => {
+    const res = await fetch("/api/admin/asset-loans");
+    if (!res.ok) return;
+    const data = await res.json();
+    setPendingHandovers(data.handovers || []);
+    setPendingReturns(data.returns || []);
+    setLoanHistory(data.history || []);
+  };
+
   useEffect(() => {
-    loadAssets();
+    fetch("/api/assets")
+      .then((res) => res.json())
+      .then((data) => {
+        setAssets(data.assets || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+    fetch("/api/admin/asset-loans")
+      .then(async (res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setPendingHandovers(data.handovers || []);
+        setPendingReturns(data.returns || []);
+        setLoanHistory(data.history || []);
+      })
+      .catch(() => {});
     fetch("/api/dashboard-role")
       .then((res) => res.json())
       .then((data) => setRole(data.role || null));
@@ -161,6 +219,7 @@ export default function AssetsPage() {
   };
 
   const handleStatusChange = async (id: string, status: string) => {
+    if (!confirm(`Change this asset's condition to ${status.replaceAll("_", " ")}?`)) return;
     await fetch(`/api/assets/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -170,15 +229,35 @@ export default function AssetsPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (assets.find((asset) => asset.id === id)?.borrowed_by) {
+      alert("Borrowed assets cannot be deleted.");
+      return;
+    }
     if (!confirm("Delete this asset record? This cannot be undone.")) return;
-    await fetch(`/api/assets/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/assets/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "Failed to delete asset");
+      return;
+    }
     loadAssets();
   };
 
   const handleConfirmReturn = async (id: string) => {
     if (!confirm("Confirm this asset has been returned?")) return;
-    const res = await fetch(`/api/assets/${id}/confirm-return`, {
+    const pendingReturn = pendingReturns.find((entry) => entry.item.asset_id === id);
+    if (!pendingReturn) {
+      alert("This return is not in the pending returns queue.");
+      return;
+    }
+    const res = await fetch(`/api/admin/asset-loans/${pendingReturn.item.id}/confirm-return`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        return_condition:
+          returnConditions[pendingReturn.item.id] || pendingReturn.item.return_condition || "good",
+        note: pendingReturn.item.return_note || "",
+      }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -186,10 +265,39 @@ export default function AssetsPage() {
       return;
     }
     loadAssets();
+    loadLoanQueue();
   };
 
-  const filteredAssets =
-    filter === "all" ? assets : assets.filter((a) => a.status === filter);
+  const handleIssueLoan = async (requestId: string) => {
+    if (!confirm("Confirm handover of all assets in this approved request?")) return;
+    const res = await fetch(`/api/admin/asset-loans/${requestId}/issue`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to issue assets");
+      return;
+    }
+    loadAssets();
+    loadLoanQueue();
+  };
+
+  const registryAssets = registryTab === "borrowed"
+    ? assets.filter((asset) => Boolean(asset.borrowed_by))
+    : registryTab === "return_pending"
+      ? assets.filter((asset) => asset.return_requested)
+      : assets;
+  const filteredAssets = registryAssets.filter((asset) => {
+    const matchesStatus = filter === "all" || asset.status === filter;
+    const matchesCategory = categoryFilter === "all" || asset.category === categoryFilter;
+    const matchesLocation = locationFilter === "all" || asset.location === locationFilter;
+    const search = assetSearch.trim().toLowerCase();
+    const matchesSearch = !search || [asset.item_name, asset.asset_tag, asset.serial_number]
+      .some((value) => value?.toLowerCase().includes(search));
+    return matchesStatus && matchesCategory && matchesLocation && matchesSearch;
+  });
+  const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) || null;
+  const selectedAssetLoans = loanHistory.filter(
+    (entry) => entry.item.asset_id === selectedAssetId,
+  );
 
   return (
     <div>
@@ -211,6 +319,94 @@ export default function AssetsPage() {
             </button>
           )}
         </div>
+
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            { label: "Total", value: assets.length, color: "text-brand-deep" },
+            { label: "Available", value: assets.filter((asset) => !asset.borrowed_by && !asset.assigned_to && ["new", "in_use"].includes(asset.status)).length, color: "text-green-700" },
+            { label: "Borrowed", value: assets.filter((asset) => Boolean(asset.borrowed_by)).length, color: "text-amber-700" },
+            { label: "Return Pending", value: assets.filter((asset) => asset.return_requested).length, color: "text-orange-700" },
+            { label: "Under Repair", value: assets.filter((asset) => asset.status === "under_repair").length, color: "text-red-700" },
+          ].map((summary) => (
+            <div key={summary.label} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="text-sm font-medium text-gray-500">{summary.label}</p>
+              <p className={`mt-2 text-2xl font-bold ${summary.color}`}>{summary.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {role === "admin" && (
+          <section className="mb-8 grid gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-brand-deep">Pending handovers</h2>
+              {pendingHandovers.length === 0 ? (
+                <p className="text-sm text-gray-500">No approved borrow requests awaiting issue.</p>
+              ) : (
+                <div className="space-y-3">
+                  {pendingHandovers.map((request) => (
+                    <div key={request.id} className="border-b border-gray-100 pb-3 last:border-0">
+                      <p className="font-medium">{request.purpose}</p>
+                      <p className="mb-2 text-xs text-gray-500">{request.requester?.name || "Borrower"}</p>
+                      <ul className="mb-3 text-sm text-gray-700">
+                        {request.items.map((item) => (
+                          <li key={item.id}>
+                            {item.asset?.item_name || "Asset"} · {item.asset?.asset_tag}
+                            {item.asset?.serial_number ? ` · SN ${item.asset.serial_number}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        onClick={() => handleIssueLoan(request.id)}
+                        className="rounded bg-brand-deep px-3 py-2 text-xs font-medium text-white"
+                      >
+                        Confirm handover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-brand-deep">Pending returns</h2>
+              {pendingReturns.length === 0 ? (
+                <p className="text-sm text-gray-500">No returns waiting for confirmation.</p>
+              ) : (
+                <div className="space-y-3">
+                  {pendingReturns.map((entry) => (
+                    <div key={entry.item.id} className="border-b border-gray-100 pb-3 last:border-0">
+                      <p className="font-medium">
+                        {entry.item.asset?.item_name || "Asset"} · {entry.item.asset?.asset_tag}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {entry.requester?.name || "Borrower"} · Reported condition: {entry.item.return_condition || "Not provided"}
+                      </p>
+                      {entry.item.return_note && <p className="my-1 text-sm text-gray-700">{entry.item.return_note}</p>}
+                      <div className="mt-2 flex gap-2">
+                        <select
+                          aria-label="Confirmed return condition"
+                          value={returnConditions[entry.item.id] || entry.item.return_condition || "good"}
+                          onChange={(e) => setReturnConditions({ ...returnConditions, [entry.item.id]: e.target.value })}
+                          className="rounded border border-gray-300 p-2 text-xs text-gray-900"
+                        >
+                          <option value="good">Good</option>
+                          <option value="damaged">Damaged</option>
+                          <option value="lost">Lost</option>
+                        </select>
+                        <button
+                          onClick={() => handleConfirmReturn(entry.item.asset_id)}
+                          className="rounded bg-green-700 px-3 py-2 text-xs font-medium text-white"
+                        >
+                          Confirm return
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {showForm && (
           <form
@@ -414,7 +610,59 @@ export default function AssetsPage() {
           </button>
         </div>
 
-        <div className="mb-6 flex flex-wrap gap-2 fade-in">
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { id: "all", label: "All" },
+            { id: "borrowed", label: "Borrowed" },
+            { id: "return_pending", label: "Return Pending" },
+            ...(role === "admin" ? [{ id: "history", label: "History" }] : []),
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setRegistryTab(tab.id)}
+              className={`rounded px-4 py-2 text-sm font-medium ${
+                registryTab === tab.id ? "bg-brand-deep text-white" : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {registryTab !== "history" && (
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <input
+              type="search"
+              value={assetSearch}
+              onChange={(e) => setAssetSearch(e.target.value)}
+              placeholder="Search item, tag, or serial number"
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            >
+              <option value="all">All categories</option>
+              <option value="electronics">Electronics</option>
+              <option value="furniture">Furniture</option>
+              <option value="vehicle">Vehicle</option>
+              <option value="office_supplies">Office supplies</option>
+              <option value="other">Other</option>
+            </select>
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            >
+              <option value="all">All locations</option>
+              <option value="Bahir Dar Office">Bahir Dar Office</option>
+              <option value="Addis Ababa Office">Addis Ababa Office</option>
+            </select>
+          </div>
+        )}
+
+        {registryTab !== "history" && <div className="mb-6 flex flex-wrap gap-2 fade-in">
           {["all", "new", "in_use", "under_repair", "retired"].map((f) => (
             <button
               key={f}
@@ -428,10 +676,43 @@ export default function AssetsPage() {
               {f === "all" ? "All" : (f || "").replace("_", " ")}
             </button>
           ))}
-        </div>
+        </div>}
 
         <div className="rounded-2xl border-t-4 border-brand bg-white/95 backdrop-blur-sm p-6 shadow-xl fade-in">
-          {loading ? (
+          {registryTab === "history" ? (
+            loanHistory.length === 0 ? (
+              <p className="text-gray-500">No completed loan history found.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-600">
+                      <th className="px-3 py-2">Asset</th>
+                      <th className="px-3 py-2">Borrower</th>
+                      <th className="px-3 py-2">Purpose</th>
+                      <th className="px-3 py-2">Due</th>
+                      <th className="px-3 py-2">Returned</th>
+                      <th className="px-3 py-2">Condition</th>
+                      <th className="px-3 py-2">Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loanHistory.map((entry) => (
+                      <tr key={entry.item.id} className="border-t border-gray-100">
+                        <td className="px-3 py-2">{entry.item.asset?.item_name || "Asset"} · {entry.item.asset?.asset_tag}</td>
+                        <td className="px-3 py-2">{entry.requester?.name || "Unknown"}</td>
+                        <td className="px-3 py-2">{entry.purpose}</td>
+                        <td className="px-3 py-2">{entry.item.due_date || "—"}</td>
+                        <td className="px-3 py-2">{entry.item.returned_at ? new Date(entry.item.returned_at).toLocaleDateString() : "—"}</td>
+                        <td className="px-3 py-2 capitalize">{entry.item.return_condition || "—"}</td>
+                        <td className="px-3 py-2">{entry.item.return_note || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : loading ? (
             <div className="space-y-4">
               <div className="h-8 shimmer rounded-lg" />
               <div className="space-y-3">
@@ -506,17 +787,21 @@ export default function AssetsPage() {
                             <th className="px-4 py-3 font-semibold">Tag</th>
                             <th className="px-4 py-3 font-semibold">Item</th>
                             <th className="px-4 py-3 font-semibold">Serial No</th>
-                            <th className="px-4 py-3 font-semibold">Assigned To</th>
-                            <th className="px-4 py-3 font-semibold">Borrowed By</th>
+                            <th className="px-4 py-3 font-semibold">Holder</th>
+                            <th className="px-4 py-3 font-semibold">Holding Status</th>
                             <th className="px-4 py-3 font-semibold">Cost</th>
                             <th className="px-4 py-3 font-semibold">Location</th>
-                            <th className="px-4 py-3 font-semibold">Status</th>
+                            <th className="px-4 py-3 font-semibold">Condition</th>
                             {canEdit && <th className="px-4 py-3 font-semibold"></th>}
                           </tr>
                         </thead>
                         <tbody>
                           {assets.map((a) => (
-                            <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors">
+                            <tr
+                              key={a.id}
+                              onClick={() => setSelectedAssetId(a.id)}
+                              className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors"
+                            >
                               <td className="px-4 py-3 font-mono text-xs font-medium text-brand-deep">{a.asset_tag}</td>
                               <td className="px-4 py-3">
                                 <span className="font-medium text-gray-900">{a.item_name}</span>
@@ -529,20 +814,21 @@ export default function AssetsPage() {
                               <td className="px-4 py-3">
                                 <span className="font-mono text-xs text-gray-600">{a.serial_number || "—"}</span>
                               </td>
-                              <td className="px-4 py-3">{a.assignee_name || "—"}</td>
+                              <td className="px-4 py-3">{a.borrower_name || a.assignee_name || "—"}</td>
                               <td className="px-4 py-3">
-                                {a.borrower_name ? (
-                                  <div>
-                                    <span className="font-medium">{a.borrower_name}</span>
-                                    {a.return_requested && (
-                                      <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 shadow-sm">
-                                        Return requested
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">—</span>
-                                )}
+                                <span className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium capitalize text-gray-700">
+                                  {a.borrowed_by
+                                    ? a.return_requested
+                                      ? "Return pending"
+                                      : "Borrowed"
+                                    : a.status === "under_repair"
+                                      ? "Under repair"
+                                      : a.status === "retired"
+                                        ? "Retired"
+                                        : a.assigned_to
+                                          ? "Assigned"
+                                        : "Available"}
+                                </span>
                               </td>
                               <td className="px-4 py-3">
                                 {a.purchase_cost ? (
@@ -593,14 +879,6 @@ export default function AssetsPage() {
                                     >
                                       Delete
                                     </button>
-                                    {a.borrowed_by && a.return_requested && (
-                                      <button
-                                        onClick={() => handleConfirmReturn(a.id)}
-                                        className="rounded-full px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-all duration-200 hover:scale-105"
-                                      >
-                                        Confirm Return
-                                      </button>
-                                    )}
                                   </div>
                                 </td>
                               )}
@@ -616,6 +894,48 @@ export default function AssetsPage() {
             </div>
           )}
         </div>
+
+        {selectedAsset && (
+          <section className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-brand-deep">
+                  {selectedAsset.item_name || "Asset details"} · {selectedAsset.asset_tag}
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Serial {selectedAsset.serial_number || "—"} · Holder {selectedAsset.borrower_name || selectedAsset.assignee_name || "—"} · Condition {(selectedAsset.status || "").replaceAll("_", " ")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAssetId(null)}
+                className="rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-700"
+              >
+                Close
+              </button>
+            </div>
+            <h3 className="mb-2 text-sm font-semibold text-gray-800">Loan history</h3>
+            {selectedAssetLoans.length === 0 ? (
+              <p className="text-sm text-gray-500">No loans recorded for this asset.</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedAssetLoans.map((entry) => (
+                  <div key={entry.item.id} className="flex flex-wrap justify-between gap-2 border-t border-gray-100 py-2 text-sm">
+                    <span>
+                      {entry.requester?.name || "Unknown borrower"} · {entry.purpose}
+                    </span>
+                    <span className="text-gray-500">
+                      Issued {entry.item.borrowed_at ? new Date(entry.item.borrowed_at).toLocaleDateString() : "—"}
+                      {entry.item.due_date ? ` · Due ${entry.item.due_date}` : ""}
+                      {entry.item.returned_at ? ` · Returned ${new Date(entry.item.returned_at).toLocaleDateString()}` : " · Not returned"}
+                      {entry.item.return_condition ? ` · ${entry.item.return_condition}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

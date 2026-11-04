@@ -28,10 +28,14 @@ export async function POST(request: Request) {
   const description = formData.get("description") as string;
   const quantity = formData.get("quantity") as string;
   const estimated_cost = formData.get("estimated_cost") as string;
+  const assetCategory = formData.get("asset_category") as string;
+  const itemName = formData.get("item_name") as string;
+  const electronicsSubcategory = formData.get("electronics_subcategory") as string;
   const justification = formData.get("justification") as string;
   const files = formData.getAll("files") as File[];
 
   const needsCost = type !== "document_request" && type !== "per_diem";
+  const needsAssetDetails = ["physical_good", "electronics", "other_asset"].includes(type);
 
   if (!type || !title) {
     return NextResponse.json(
@@ -54,6 +58,21 @@ export async function POST(request: Request) {
     );
   }
 
+  if (needsAssetDetails && !assetCategory) {
+    return NextResponse.json(
+      { error: "Asset category is required for purchase requests" },
+      { status: 400 },
+    );
+  }
+  if (
+    needsAssetDetails &&
+    !["electronics", "furniture", "vehicle", "office_supplies", "other"].includes(
+      type === "electronics" ? "electronics" : assetCategory,
+    )
+  ) {
+    return NextResponse.json({ error: "Invalid asset category" }, { status: 400 });
+  }
+
   const { data: newRequest, error } = await supabase
     .from("requests")
     .insert({
@@ -63,6 +82,9 @@ export async function POST(request: Request) {
       description: description || null,
       quantity: needsCost ? (quantity ? Number(quantity) : 1) : null,
       estimated_cost: needsCost ? Number(estimated_cost) : 0,
+      asset_category: needsAssetDetails ? (type === "electronics" ? "electronics" : assetCategory) : null,
+      item_name: needsAssetDetails ? (itemName || title) : null,
+      electronics_subcategory: type === "electronics" ? electronicsSubcategory || null : null,
       justification: justification || null,
       status: "pending_manager",
     })

@@ -1,46 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-const categoryPrefixes: Record<string, string> = {
-  electronics: "GPEL",
-  furniture: "GPFU",
-  vehicle: "GPVE",
-  office_supplies: "GPOF",
-  other: "GPOT",
-};
-
-async function generateAssetTag(
-  supabase: Awaited<
-    ReturnType<typeof import("@/lib/supabase/server").createClient>
-  >,
-  category: string,
-) {
-  const prefix = categoryPrefixes[category] || "GPOT";
-
-  // Query the highest existing asset tag for this category
-  const { data: existingAssets } = await supabase
-    .from("assets")
-    .select("asset_tag")
-    .eq("category", category)
-    .like("asset_tag", `${prefix}%`)
-    .order("asset_tag", { ascending: false })
-    .limit(1);
-
-  let nextNumber = 1;
-
-  if (existingAssets && existingAssets.length > 0) {
-    const lastTag = existingAssets[0].asset_tag;
-    const lastNumber = parseInt(lastTag.replace(prefix, ""), 10);
-    nextNumber = lastNumber + 1;
-  }
-
-  // Update the sequence table for tracking
-  await supabase
-    .from("asset_tag_sequence")
-    .upsert({ category, last_number: nextNumber }, { onConflict: "category" });
-
-  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
-}
+import { generateAssetTag } from "@/lib/assets";
 function getServiceClient() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,6 +18,15 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase
+    .from("public_users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "finance", "manager"].includes(profile.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { data: assets, error } = await supabase
@@ -160,7 +130,7 @@ export async function POST(request: Request) {
           purchase_date: purchase_date || null,
           status: status || "in_use",
           location: location || null,
-          quantity: numQuantity,
+          quantity: 1,
         }).select().single();
 
         if (error) {
@@ -197,7 +167,7 @@ export async function POST(request: Request) {
       purchase_date: purchase_date || null,
       status: status || "in_use",
       location: location || null,
-      quantity: quantity ? Number(quantity) : null,
+      quantity: category === "furniture" ? 1 : quantity ? Number(quantity) : null,
     });
 
     if (error) {

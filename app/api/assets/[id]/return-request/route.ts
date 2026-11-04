@@ -16,17 +16,24 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { error } = await supabase
-    .from("assets")
-    .update({
-      return_requested: true,
-      return_requested_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("borrowed_by", user.id);
+  const { data: loan, error: loanError } = await supabase
+    .from("asset_loans")
+    .select("id")
+    .eq("asset_id", id)
+    .eq("borrower_id", user.id)
+    .eq("status", "issued")
+    .single();
+  if (loanError || !loan) {
+    return NextResponse.json({ error: "No active loan found for this asset" }, { status: 404 });
+  }
 
+  const { error } = await supabase.rpc("request_asset_loan_return", {
+    p_loan_id: loan.id,
+    p_return_condition: "good",
+    p_note: null,
+  });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 409 });
   }
 
   return NextResponse.json({ success: true });

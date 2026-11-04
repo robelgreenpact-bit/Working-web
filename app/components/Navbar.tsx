@@ -89,8 +89,7 @@ export default function Navbar({ title }: { title: string }) {
             ? "/accountant"
             : "/worker";
 
-  const canSeeAssets =
-    role === "admin" || role === "manager" || role === "finance";
+  const canSeeAssets = Boolean(role && role !== "accountant");
   const canSeeReports =
     role === "admin" || role === "manager" || role === "finance";
   const canSeeTaxRegistry =
@@ -118,6 +117,7 @@ export default function Navbar({ title }: { title: string }) {
             }`}
           >
             Assets
+            <Badge count={badges.assetLoans || 0} />
             <svg
               width="12"
               height="12"

@@ -35,13 +35,6 @@ type HistoryRow = RequestRow & {
   }[];
 };
 
-type AvailableAsset = {
-  id: string;
-  asset_tag: string;
-  item_name: string | null;
-  category: string;
-};
-
 function daysAgo(dateStr: string) {
   const days = Math.floor(
     (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24)
@@ -60,16 +53,11 @@ export default function FinancePage() {
     {}
   );
   const [processing, setProcessing] = useState<string | null>(null);
-  const [availableAssets, setAvailableAssets] = useState<AvailableAsset[]>([]);
-  const [inventoryChoice, setInventoryChoice] = useState<
-    Record<string, string>
-  >({});
   const [taxRegistryChoice, setTaxRegistryChoice] = useState<
     Record<string, boolean>
   >({});
 
   const loadData = async () => {
-    setLoading(true);
     const res = await fetch("/api/finance/requests");
     const data = await res.json();
     setRequests(data.requests || []);
@@ -84,12 +72,18 @@ export default function FinancePage() {
   };
 
   useEffect(() => {
-    loadData();
-    loadHistory();
-    fetch("/api/assets/available")
+    fetch("/api/finance/requests")
       .then((res) => res.json())
-      .then((data) => setAvailableAssets(data.assets || []))
-      .catch(() => {});
+      .then((data) => {
+        setRequests(data.requests || []);
+        setLoading(false);
+      });
+    fetch("/api/finance/history")
+      .then((res) => res.json())
+      .then((data) => {
+        setHistory(data.requests || []);
+        setHistoryLoading(false);
+      });
   }, []);
 
   const handleDecision = async (
@@ -97,15 +91,12 @@ export default function FinancePage() {
     decision: "approved" | "rejected"
   ) => {
     setProcessing(id);
-    const chosenAssetId = inventoryChoice[id];
     const res = await fetch(`/api/finance/requests/${id}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         decision,
         comment: commentDrafts[id] || "",
-        issueFromInventory: !!chosenAssetId,
-        assetId: chosenAssetId || null,
         forTaxRegistry: taxRegistryChoice[id] || false,
       }),
     });
@@ -204,31 +195,6 @@ export default function FinancePage() {
                         </li>
                       ))}
                     </ul>
-                  </div>
-                )}
-
-                {(r.type === "physical_good" || r.type === "other_asset") && (
-                  <div className="mb-3">
-                    <label className="mb-1 block text-xs font-medium text-gray-500">
-                      Fulfill from Inventory (optional)
-                    </label>
-                    <select
-                      value={inventoryChoice[r.id] || ""}
-                      onChange={(e) =>
-                        setInventoryChoice({
-                          ...inventoryChoice,
-                          [r.id]: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-                    >
-                      <option value="">— Buy new instead —</option>
-                      {availableAssets.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.asset_tag} — {a.item_name} ({a.category})
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 )}
 

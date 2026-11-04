@@ -5,47 +5,78 @@ import Navbar from "@/app/components/Navbar";
 
 type InventoryItem = {
   category: string;
-  item_name: string;
+  item_name: string | null;
+  total_count: number;
   available_count: number;
+  borrowed_count: number;
+  under_repair_count: number;
 };
 
 type InventoryAsset = {
+  id: string;
   asset_tag: string;
   category: string | null;
   item_name: string | null;
   serial_number: string | null;
+  location: string | null;
+  status: string;
+  due_date: string | null;
+  current_holder: string | null;
 };
 
 export default function InventoryPage() {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [inventoryAssets, setInventoryAssets] = useState<InventoryAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [serialSearch, setSerialSearch] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/assets/inventory")
       .then((res) => res.json())
       .then((data) => {
-        setInventory(data.inventory || []);
         setInventoryAssets(data.assets || []);
         setLoading(false);
       })
       .catch(() => {
         setLoading(false);
       });
+    fetch("/api/dashboard-role")
+      .then((res) => res.json())
+      .then((data) => setRole(data.role || null))
+      .catch(() => {});
   }, []);
 
-  const categoryColors: Record<string, string> = {
-    electronics: "bg-blue-100 text-blue-800",
-    furniture: "bg-amber-100 text-amber-800",
-    vehicle: "bg-green-100 text-green-800",
-    office_supplies: "bg-purple-100 text-purple-800",
-    other: "bg-gray-100 text-gray-800",
-  };
+  const filteredAssets = inventoryAssets.filter((asset) =>
+    locationFilter === "all" || asset.location === locationFilter,
+  );
+
+  const inventory = filteredAssets.reduce((items, asset) => {
+    const category = asset.category || "other";
+    const key = `${category}-${asset.item_name || "unnamed"}`;
+    let item = items.find((entry) => `${entry.category}-${entry.item_name || "unnamed"}` === key);
+    if (!item) {
+      item = {
+        category,
+        item_name: asset.item_name,
+        total_count: 0,
+        available_count: 0,
+        borrowed_count: 0,
+        under_repair_count: 0,
+      };
+      items.push(item);
+    }
+    item.total_count++;
+    if (asset.status === "available") item.available_count++;
+    if (asset.status === "borrowed" || asset.status === "return_requested") item.borrowed_count++;
+    if (asset.status === "under_repair") item.under_repair_count++;
+    return items;
+  }, [] as InventoryItem[]);
 
   const matchingAssets = serialSearch.trim()
-    ? inventoryAssets.filter((asset) =>
+    ? filteredAssets.filter((asset) =>
         asset.serial_number?.toLowerCase().includes(serialSearch.trim().toLowerCase()),
       )
     : [];
@@ -81,13 +112,26 @@ export default function InventoryPage() {
             />
           </label>
 
+          <label className="mb-5 block max-w-xs">
+            <span className="mb-2 block text-sm font-medium text-gray-700">Location</span>
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900"
+            >
+              <option value="all">All locations</option>
+              <option value="Bahir Dar Office">Bahir Dar Office</option>
+              <option value="Addis Ababa Office">Addis Ababa Office</option>
+            </select>
+          </label>
+
           {serialSearch.trim() && !loading && (
             <div className="mb-8">
               <h2 className="mb-3 text-lg font-semibold text-brand-deep">
-                Matching available assets
+                Matching assets
               </h2>
               {matchingAssets.length === 0 ? (
-                <p className="text-sm text-gray-500">No available assets match that serial number.</p>
+                <p className="text-sm text-gray-500">No assets match that serial number.</p>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-gray-200">
                   <table className="w-full text-left text-sm">
@@ -97,15 +141,34 @@ export default function InventoryPage() {
                         <th className="px-4 py-3 font-semibold">Serial Number</th>
                         <th className="px-4 py-3 font-semibold">Asset Tag</th>
                         <th className="px-4 py-3 font-semibold">Category</th>
+                        <th className="px-4 py-3 font-semibold">Status</th>
+                        <th className="px-4 py-3 font-semibold">Holder</th>
+                        <th className="px-4 py-3 font-semibold">Location</th>
+                        {role === "worker" && <th className="px-4 py-3 font-semibold"></th>}
                       </tr>
                     </thead>
                     <tbody>
                       {matchingAssets.map((asset) => (
-                        <tr key={asset.asset_tag} className="border-t border-gray-100">
+                        <tr key={asset.id} className="border-t border-gray-100">
                           <td className="px-4 py-3 font-medium text-gray-900">{asset.item_name || "—"}</td>
                           <td className="px-4 py-3 font-mono text-xs">{asset.serial_number}</td>
                           <td className="px-4 py-3 font-mono text-xs">{asset.asset_tag}</td>
                           <td className="px-4 py-3">{(asset.category || "other").replaceAll("_", " ")}</td>
+                          <td className="px-4 py-3 capitalize">{asset.status.replaceAll("_", " ")}</td>
+                          <td className="px-4 py-3">{asset.current_holder || "—"}</td>
+                          <td className="px-4 py-3">{asset.location || "—"}</td>
+                          {role === "worker" && (
+                            <td className="px-4 py-3">
+                              {asset.status === "available" && (
+                                <a
+                                  href={`/worker/new-request?mode=borrow&assetId=${asset.id}`}
+                                  className="whitespace-nowrap rounded bg-brand-deep px-3 py-2 text-xs font-medium text-white"
+                                >
+                                  Request to borrow
+                                </a>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -188,30 +251,51 @@ export default function InventoryPage() {
                         <thead>
                           <tr className="bg-gray-50 text-gray-600">
                             <th className="px-4 py-3 font-semibold">Item Name</th>
+                            <th className="px-4 py-3 text-center font-semibold">Total</th>
                             <th className="px-4 py-3 text-center font-semibold">Available</th>
+                            <th className="px-4 py-3 text-center font-semibold">Borrowed</th>
+                            <th className="px-4 py-3 text-center font-semibold">Under Repair</th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {items.map((item, index) => (
-                            <tr
-                              key={`${item.category}-${item.item_name}-${index}`}
-                              className="border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors"
-                            >
-                              <td className="px-4 py-3 font-medium text-gray-900">{item.item_name || "—"}</td>
-                              <td className="px-4 py-3 text-center">
-                                <span
-                                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full font-bold shadow-sm transition-all duration-200 hover:scale-110 ${
-                                    item.available_count > 0
-                                      ? "bg-gradient-to-br from-green-400 to-green-600 text-white"
-                                      : "bg-gradient-to-br from-red-400 to-red-600 text-white"
-                                  }`}
-                                >
-                                  {item.available_count}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
+                          {items.map((item, index) => {
+                            const itemKey = `${item.category}-${item.item_name}-${index}`;
+                            const details = filteredAssets.filter(
+                              (asset) => asset.category === item.category && asset.item_name === item.item_name,
+                            );
+                            return (
+                              <tbody key={itemKey}>
+                                <tr className="border-b border-gray-100 hover:bg-brand/5 transition-colors">
+                                  <td className="px-4 py-3 font-medium text-gray-900">
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedItems({ ...expandedItems, [itemKey]: !expandedItems[itemKey] })}
+                                      className="mr-2 text-brand-deep"
+                                      aria-expanded={Boolean(expandedItems[itemKey])}
+                                    >
+                                      {expandedItems[itemKey] ? "−" : "+"}
+                                    </button>
+                                    {item.item_name || "—"}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">{item.total_count}</td>
+                                  <td className={`px-4 py-3 text-center font-semibold ${item.available_count === 0 ? "text-red-700" : item.available_count <= 2 ? "text-amber-700" : "text-green-700"}`}>{item.available_count}</td>
+                                  <td className="px-4 py-3 text-center">{item.borrowed_count}</td>
+                                  <td className="px-4 py-3 text-center">{item.under_repair_count}</td>
+                                </tr>
+                                {expandedItems[itemKey] && details.map((asset) => (
+                                  <tr key={asset.id} className="border-b border-gray-100 bg-gray-50 text-xs">
+                                    <td className="px-4 py-2 pl-10">{asset.asset_tag} · {asset.serial_number || "No serial"}</td>
+                                    <td className="px-4 py-2" colSpan={2}>{asset.location || "No location"}</td>
+                                    <td className="px-4 py-2 capitalize">{asset.current_holder || asset.status.replaceAll("_", " ")}</td>
+                                    <td className="px-4 py-2">
+                                      {role === "worker" && asset.status === "available" ? (
+                                        <a href={`/worker/new-request?mode=borrow&assetId=${asset.id}`} className="text-brand-deep underline">Request to borrow</a>
+                                      ) : asset.status.replaceAll("_", " ")}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            );
+                          })}
                       </table>
                     </div>
                     )}
@@ -222,13 +306,19 @@ export default function InventoryPage() {
           )}
         </div>
 
-        <div className="mt-8 fade-in">
-          <div className="rounded-2xl border-t-4 border-green-500 bg-white/95 backdrop-blur-sm p-6 shadow-lg hover:shadow-xl transition-shadow">
-            <p className="text-sm font-medium text-gray-500">Available</p>
-            <p className="mt-3 text-3xl font-bold text-green-700">
-              {inventory.reduce((sum, item) => sum + item.available_count, 0)}
-            </p>
-          </div>
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            { label: "Total", value: filteredAssets.length, color: "text-brand-deep" },
+            { label: "Available", value: filteredAssets.filter((asset) => asset.status === "available").length, color: "text-green-700" },
+            { label: "Borrowed", value: filteredAssets.filter((asset) => ["borrowed", "overdue", "return_requested"].includes(asset.status)).length, color: "text-amber-700" },
+            { label: "Return Pending", value: filteredAssets.filter((asset) => asset.status === "return_requested").length, color: "text-orange-700" },
+            { label: "Under Repair", value: filteredAssets.filter((asset) => asset.status === "under_repair").length, color: "text-red-700" },
+          ].map((summary) => (
+            <div key={summary.label} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="text-sm font-medium text-gray-500">{summary.label}</p>
+              <p className={`mt-2 text-2xl font-bold ${summary.color}`}>{summary.value}</p>
+            </div>
+          ))}
         </div>
       </div>
     </div>

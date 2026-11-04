@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
+
+type AvailableAsset = {
+  id: string;
+  asset_tag: string;
+  item_name: string | null;
+  category: string;
+  serial_number: string | null;
+  location: string | null;
+};
 
 const perDiemTemplate = `**Per Diem Request**
 **Date:** ____________________
@@ -76,12 +85,17 @@ const typeConfig: Record<
 };
 
 export default function NewRequestPage() {
+  const [borrowMode, setBorrowMode] = useState(false);
+  const [availableAssets, setAvailableAssets] = useState<AvailableAsset[]>([]);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [dueDate, setDueDate] = useState("");
   const [form, setForm] = useState({
     type: "physical_good",
     title: "",
     description: "",
     quantity: 1,
     estimated_cost: "",
+    asset_category: "",
     electronics_subcategory: "",
   });
   const [perDiemFields, setPerDiemFields] = useState({
@@ -104,6 +118,19 @@ export default function NewRequestPage() {
   const router = useRouter();
 
   const config = typeConfig[form.type];
+
+  useEffect(() => {
+    fetch("/api/assets/available")
+      .then((res) => res.json())
+      .then((data) => {
+        setAvailableAssets(data.assets || []);
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("mode") === "borrow") setBorrowMode(true);
+        const assetId = params.get("assetId");
+        if (assetId) setSelectedAssetIds([assetId]);
+      })
+      .catch(() => setAvailableAssets([]));
+  }, []);
 
   const buildPerDiemDescription = () => {
     const lines = [
@@ -147,6 +174,8 @@ export default function NewRequestPage() {
       type: value,
       description:
         value === "per_diem" ? perDiemTemplate : "",
+      asset_category:
+        value === "electronics" ? "electronics" : prev.asset_category,
       electronics_subcategory:
         value === "electronics" ? prev.electronics_subcategory : "",
     }));
@@ -156,6 +185,26 @@ export default function NewRequestPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+
+    if (borrowMode) {
+      const res = await fetch("/api/asset-loans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_ids: selectedAssetIds,
+          purpose: form.description,
+          due_date: dueDate,
+        }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) {
+        setError(data.error || "Failed to submit borrow request");
+        return;
+      }
+      router.push("/worker");
+      return;
+    }
 
     const submissionTitle =
       (form.type === "per_diem" || form.type === "other_asset") && !form.title.trim()
@@ -168,6 +217,9 @@ export default function NewRequestPage() {
     formData.append("type", form.type);
     formData.append("title", submissionTitle);
     formData.append("description", submissionDescription);
+    formData.append("asset_category", form.asset_category);
+    formData.append("item_name", submissionTitle);
+    formData.append("electronics_subcategory", form.electronics_subcategory);
 
     if (config.needsQuantity) {
       formData.append("quantity", String(form.quantity));
@@ -216,6 +268,97 @@ export default function NewRequestPage() {
             </p>
           )}
 
+          <div className="mb-6 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              aria-pressed={!borrowMode}
+              onClick={() => setBorrowMode(false)}
+              className={`rounded px-4 py-3 text-sm font-medium ${
+                !borrowMode ? "bg-brand-deep text-white" : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              Request to purchase
+            </button>
+            <button
+              type="button"
+              aria-pressed={borrowMode}
+              onClick={() => setBorrowMode(true)}
+              className={`rounded px-4 py-3 text-sm font-medium ${
+                borrowMode ? "bg-brand-deep text-white" : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              Borrow from inventory
+            </button>
+          </div>
+
+          {borrowMode ? (
+            <>
+              <div className="mb-4">
+                <label className="mb-1 block text-sm text-gray-600">Purpose</label>
+                <textarea
+                  required
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  rows={3}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="mb-1 block text-sm text-gray-600">Expected return date</label>
+                <input
+                  type="date"
+                  required
+                  min={new Date().toISOString().slice(0, 10)}
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                />
+              </div>
+              <fieldset className="mb-6">
+                <legend className="mb-2 text-sm font-medium text-gray-700">
+                  Select assets ({selectedAssetIds.length} selected)
+                </legend>
+                {availableAssets.length === 0 ? (
+                  <p className="rounded border border-gray-200 p-4 text-sm text-gray-500">
+                    No assets are currently available to borrow.
+                  </p>
+                ) : (
+                  <div className="max-h-80 space-y-2 overflow-y-auto">
+                    {availableAssets.map((asset) => (
+                      <label
+                        key={asset.id}
+                        className="flex cursor-pointer items-start gap-3 rounded border border-gray-200 p-3 hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedAssetIds.includes(asset.id)}
+                          onChange={(e) =>
+                            setSelectedAssetIds((current) =>
+                              e.target.checked
+                                ? [...current, asset.id]
+                                : current.filter((id) => id !== asset.id),
+                            )
+                          }
+                          className="mt-1"
+                        />
+                        <span className="text-sm">
+                          <span className="block font-medium text-gray-900">
+                            {asset.item_name || "Unnamed asset"} · {asset.asset_tag}
+                          </span>
+                          <span className="text-gray-500">
+                            {(asset.category || "other").replaceAll("_", " ")}
+                            {asset.serial_number ? ` · SN ${asset.serial_number}` : ""}
+                            {asset.location ? ` · ${asset.location}` : ""}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </fieldset>
+            </>
+          ) : (
+            <>
           <div className="mb-4">
             <label className="mb-1 block text-sm text-gray-600">
               What do you want to request?
@@ -232,6 +375,25 @@ export default function NewRequestPage() {
               ))}
             </select>
           </div>
+
+          {(form.type === "physical_good" || form.type === "other_asset") && (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm text-gray-600">Asset category</label>
+              <select
+                required
+                value={form.asset_category}
+                onChange={(e) => setForm({ ...form, asset_category: e.target.value })}
+                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+              >
+                <option value="">Select category</option>
+                <option value="electronics">Electronics</option>
+                <option value="furniture">Furniture</option>
+                <option value="vehicle">Vehicle</option>
+                <option value="office_supplies">Office supplies</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          )}
 
           {form.type === "electronics" && (
             <div className="mb-4">
@@ -429,6 +591,8 @@ export default function NewRequestPage() {
               allowed.
             </p>
           </div>
+            </>
+          )}
 
           <button
             type="submit"
