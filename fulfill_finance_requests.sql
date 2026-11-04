@@ -1,3 +1,19 @@
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  type VARCHAR(50) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  message TEXT,
+  link VARCHAR(255),
+  read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at DESC);
+
 ALTER TABLE requests
   ADD COLUMN IF NOT EXISTS fulfillment_status TEXT NOT NULL DEFAULT 'not_applicable',
   ADD COLUMN IF NOT EXISTS purchase_quantity INTEGER NOT NULL DEFAULT 0,
@@ -147,8 +163,7 @@ BEGIN
     IF p_fulfillment_mode NOT IN ('assign', 'lend') THEN
       RAISE EXCEPTION 'Choose Assign or Lend for the requested units';
     END IF;
-    IF p_fulfillment_mode = 'lend' AND required_count > 0
-      AND (p_due_date IS NULL OR p_due_date < CURRENT_DATE) THEN
+    IF p_fulfillment_mode = 'lend' AND p_due_date IS NOT NULL AND p_due_date < CURRENT_DATE THEN
       RAISE EXCEPTION 'Choose a return date today or later for lent units';
     END IF;
     IF CARDINALITY(ARRAY(SELECT DISTINCT UNNEST(COALESCE(p_asset_ids, ARRAY[]::UUID[])))) <> selected_count THEN

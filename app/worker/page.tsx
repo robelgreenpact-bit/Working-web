@@ -129,7 +129,7 @@ export default function WorkerPage() {
                     </span>
                   </div>
                   <p className="mb-3 text-xs text-gray-500">
-                    Expected return: {request.due_date || "Not recorded for this legacy loan"}
+                    Expected return: {request.due_date || "No due date set"}
                   </p>
                   <div className="space-y-3">
                     {request.items.map((loan) => (

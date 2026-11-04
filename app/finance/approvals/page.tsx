@@ -117,8 +117,6 @@ export default function FinancePage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [purchaseAssets, setPurchaseAssets] = useState<LoanChoice[]>([]);
   const [purchaseSelections, setPurchaseSelections] = useState<Record<string, string[]>>({});
-  const [purchaseModes, setPurchaseModes] = useState<Record<string, string>>({});
-  const [purchaseDueDates, setPurchaseDueDates] = useState<Record<string, string>>({});
   const [purchaseSearches, setPurchaseSearches] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -249,10 +247,6 @@ export default function FinancePage() {
         alert("Select a different inventory unit for each requested item.");
         return;
       }
-      if (selections.some(Boolean) && purchaseModes[id] === "lend" && !purchaseDueDates[id]) {
-        alert("Choose a return date for units being lent.");
-        return;
-      }
     }
 
     setProcessing(id);
@@ -264,11 +258,11 @@ export default function FinancePage() {
         comment: commentDrafts[id] || "",
         forTaxRegistry: taxRegistryChoice[id] || false,
         assetIds: isElectronics && decision === "approved" ? selections : [],
-        fulfillmentMode: purchaseModes[id] || "assign",
+        fulfillmentMode: isElectronics ? "lend" : "assign",
         purchaseQuantity: requestRow && ["physical_good", "other_asset"].includes(requestRow.type)
           ? Math.max(1, requestRow.quantity || 1)
           : 0,
-        dueDate: purchaseDueDates[id] || null,
+        dueDate: null,
       }),
     });
 
@@ -435,31 +429,9 @@ export default function FinancePage() {
                       })}
                     </div>
 
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <label className="text-sm text-gray-700">
-                          Fulfillment
-                          <select
-                            value={purchaseModes[r.id] || "assign"}
-                            onChange={(e) => setPurchaseModes({ ...purchaseModes, [r.id]: e.target.value })}
-                            className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                          >
-                            <option value="assign">Assign permanently</option>
-                            <option value="lend">Lend (returnable)</option>
-                          </select>
-                        </label>
-                        {purchaseModes[r.id] === "lend" && (
-                          <label className="text-sm text-gray-700">
-                            Return date
-                            <input
-                              type="date"
-                              min={new Date().toISOString().slice(0, 10)}
-                              value={purchaseDueDates[r.id] || ""}
-                              onChange={(e) => setPurchaseDueDates({ ...purchaseDueDates, [r.id]: e.target.value })}
-                              className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                            />
-                          </label>
-                        )}
-                    </div>
+                    <p className="mt-3 text-xs text-gray-500">
+                      Selected electronics are lent to the requester. Admin confirms handover; the worker requests return later.
+                    </p>
                   </section>
                 )}
 
@@ -532,8 +504,7 @@ export default function FinancePage() {
                       r.type === "electronics" &&
                       ((purchaseSelections[r.id] || []).length !== Math.max(1, r.quantity || 1) ||
                         (purchaseSelections[r.id] || []).some((selection) => !selection) ||
-                        new Set(purchaseSelections[r.id] || []).size !== Math.max(1, r.quantity || 1) ||
-                        (purchaseModes[r.id] === "lend" && !purchaseDueDates[r.id]))
+                        new Set(purchaseSelections[r.id] || []).size !== Math.max(1, r.quantity || 1))
                     )}
                     className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
                   >
