@@ -15,6 +15,10 @@ type RequestRow = {
   title: string;
   description: string | null;
   quantity: number | null;
+  purchase_quantity: number;
+  asset_category: string | null;
+  item_name: string | null;
+  electronics_subcategory: string | null;
   estimated_cost: number;
   justification: string | null;
   created_at: string;
@@ -24,6 +28,14 @@ type RequestRow = {
 
 type HistoryRow = RequestRow & {
   status: string;
+  fulfillment_status: string;
+  request_assets: {
+    id: string;
+    fulfillment_mode: string;
+    source: string;
+    due_date: string | null;
+    asset: LoanChoice | null;
+  }[];
   tax_registered: boolean;
   tax_reference: string | null;
   approvals: {
@@ -42,6 +54,7 @@ type LoanChoice = {
   category: string | null;
   serial_number: string | null;
   location: string | null;
+  electronics_subcategory?: string | null;
 };
 
 type FinanceLoanRequest = {
@@ -115,8 +128,15 @@ const handleDownload = (requestId: string) => {
 
 export default function FinancePage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
+  const [purchaseAssets, setPurchaseAssets] = useState<LoanChoice[]>([]);
+  const [purchaseSelections, setPurchaseSelections] = useState<Record<string, string[]>>({});
+  const [purchaseModes, setPurchaseModes] = useState<Record<string, string>>({});
+  const [purchaseDueDates, setPurchaseDueDates] = useState<Record<string, string>>({});
+  const [purchaseSearches, setPurchaseSearches] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [arrivalSerials, setArrivalSerials] = useState<Record<string, string[]>>({});
+  const [receivingRequest, setReceivingRequest] = useState<string | null>(null);
   const [loanRequests, setLoanRequests] = useState<FinanceLoanRequest[]>([]);
   const [loanSelections, setLoanSelections] = useState<Record<string, string[]>>({});
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -131,7 +151,17 @@ export default function FinancePage() {
   const loadData = async () => {
     const res = await fetch("/api/finance/requests");
     const data = await res.json();
-    setRequests(data.requests || []);
+    const nextRequests: RequestRow[] = data.requests || [];
+    setRequests(nextRequests);
+    setPurchaseSelections((current) => {
+      const next = { ...current };
+      for (const request of nextRequests) {
+        if (["electronics", "physical_good", "other_asset"].includes(request.type) && !next[request.id]) {
+          next[request.id] = Array(Math.max(1, request.quantity || 1)).fill("");
+        }
+      }
+      return next;
+    });
     setLoading(false);
   };
 
@@ -139,8 +169,46 @@ export default function FinancePage() {
     setHistoryLoading(true);
     const res = await fetch("/api/finance/history");
     const data = await res.json();
-    setHistory(data.requests || []);
+    const nextHistory: HistoryRow[] = data.requests || [];
+    setHistory(nextHistory);
+    setArrivalSerials((current) => {
+      const next = { ...current };
+      for (const request of nextHistory) {
+        const receivedCount = request.request_assets.filter((asset) => asset.source === "purchase").length;
+        const remainingCount = Math.max(0, request.purchase_quantity - receivedCount);
+        if (!next[request.id] || next[request.id].length !== remainingCount) {
+          next[request.id] = Array(remainingCount).fill("");
+        }
+      }
+      return next;
+    });
     setHistoryLoading(false);
+  };
+
+  const registerArrivedAssets = async (request: HistoryRow) => {
+    const serialNumbers = (arrivalSerials[request.id] || []).map((serial) => serial.trim()).filter(Boolean);
+    if (!serialNumbers.length) {
+      alert("Enter at least one received unit's serial number.");
+      return;
+    }
+
+    setReceivingRequest(request.id);
+    const res = await fetch(`/api/finance/requests/${request.id}/receive-assets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serial_numbers: serialNumbers }),
+    });
+    const data = await res.json();
+    setReceivingRequest(null);
+    if (!res.ok) {
+      alert(data.error || "Failed to register received assets");
+      return;
+    }
+    const createdLabels = (data.assets || []).map(
+      (asset: { asset_tag: string; serial_number: string }) => `${asset.asset_tag} (SN ${asset.serial_number})`,
+    );
+    alert(`Registered and assigned: ${createdLabels.join(", ")}`);
+    loadHistory();
   };
 
   const loadLoanRequests = async () => {
@@ -185,15 +253,36 @@ export default function FinancePage() {
     fetch("/api/finance/requests")
       .then((res) => res.json())
       .then((data) => {
-        setRequests(data.requests || []);
+        const nextRequests: RequestRow[] = data.requests || [];
+        setRequests(nextRequests);
+        setPurchaseSelections(
+          Object.fromEntries(
+            nextRequests
+              .filter((request) => ["electronics", "physical_good", "other_asset"].includes(request.type))
+              .map((request) => [request.id, Array(Math.max(1, request.quantity || 1)).fill("")]),
+          ),
+        );
         setLoading(false);
       });
     fetch("/api/finance/history")
       .then((res) => res.json())
       .then((data) => {
-        setHistory(data.requests || []);
+        const nextHistory: HistoryRow[] = data.requests || [];
+        setHistory(nextHistory);
+        setArrivalSerials(
+          Object.fromEntries(
+            nextHistory.map((request) => {
+              const receivedCount = request.request_assets.filter((asset) => asset.source === "purchase").length;
+              return [request.id, Array(Math.max(0, request.purchase_quantity - receivedCount)).fill("")];
+            }),
+          ),
+        );
         setHistoryLoading(false);
       });
+    fetch("/api/assets/available")
+      .then((res) => res.json())
+      .then((data) => setPurchaseAssets(data.assets || []))
+      .catch(() => setPurchaseAssets([]));
     fetch("/api/finance/asset-loans")
       .then((res) => res.json())
       .then((data) => {
@@ -214,6 +303,26 @@ export default function FinancePage() {
     id: string,
     decision: "approved" | "rejected",
   ) => {
+    const requestRow = requests.find((request) => request.id === id);
+    const isDurable = Boolean(requestRow && ["electronics", "physical_good", "other_asset"].includes(requestRow.type));
+    const selections = purchaseSelections[id] || [];
+    if (decision === "approved" && isDurable) {
+      const expectedQuantity = Math.max(1, requestRow?.quantity || 1);
+      if (selections.length !== expectedQuantity || selections.some((selection) => !selection)) {
+        alert("Select an inventory unit or mark each unit as needs purchase.");
+        return;
+      }
+      const selectedIds = selections.filter((selection) => selection !== "purchase");
+      if (new Set(selectedIds).size !== selectedIds.length) {
+        alert("Select a different inventory unit for each requested item.");
+        return;
+      }
+      if (selections.some(Boolean) && purchaseModes[id] === "lend" && !purchaseDueDates[id]) {
+        alert("Choose a return date for units being lent.");
+        return;
+      }
+    }
+
     setProcessing(id);
     const res = await fetch(`/api/finance/requests/${id}/decide`, {
       method: "POST",
@@ -222,6 +331,10 @@ export default function FinancePage() {
         decision,
         comment: commentDrafts[id] || "",
         forTaxRegistry: taxRegistryChoice[id] || false,
+        assetIds: selections.filter((selection) => selection !== "purchase"),
+        fulfillmentMode: purchaseModes[id] || "assign",
+        purchaseQuantity: selections.filter((selection) => selection === "purchase").length,
+        dueDate: purchaseDueDates[id] || null,
       }),
     });
 
@@ -239,6 +352,18 @@ export default function FinancePage() {
 
     loadData();
     loadHistory();
+  };
+
+  const compatibleAssets = (request: RequestRow) => {
+    const hasDistinctItemName = Boolean(request.item_name && request.item_name !== request.title);
+    return purchaseAssets.filter((asset) =>
+      asset.category === (request.asset_category || (request.type === "electronics" ? "electronics" : "other")) &&
+      (!hasDistinctItemName || asset.item_name === request.item_name) &&
+      (request.type !== "electronics" || (
+        (!request.electronics_subcategory || asset.electronics_subcategory === request.electronics_subcategory) &&
+        Boolean(asset.serial_number?.trim())
+      )),
+    );
   };
 
   return (
@@ -375,6 +500,99 @@ export default function FinancePage() {
                   )}
                 </div>
 
+                {["electronics", "physical_good", "other_asset"].includes(r.type) && (
+                  <section className="mb-4 rounded border border-gray-200 bg-gray-50 p-4">
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Assign requested units</h3>
+                        <p className="text-sm text-gray-600">
+                          {r.item_name || r.title}
+                          {r.electronics_subcategory ? ` · ${r.electronics_subcategory.toUpperCase()}` : ""}
+                          {` · Quantity ${Math.max(1, r.quantity || 1)}`}
+                        </p>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {compatibleAssets(r).length} matching units available
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {Array.from({ length: Math.max(1, r.quantity || 1) }, (_, unitIndex) => {
+                        const searchKey = `${r.id}-${unitIndex}`;
+                        const searchTerm = (purchaseSearches[searchKey] || "").trim().toLowerCase();
+                        const selected = purchaseSelections[r.id]?.[unitIndex] || "";
+                        const candidates = compatibleAssets(r).filter((asset) =>
+                          !searchTerm || [asset.asset_tag, asset.serial_number, asset.item_name]
+                            .some((value) => value?.toLowerCase().includes(searchTerm)),
+                        );
+                        return (
+                          <div key={searchKey} className="grid gap-2 sm:grid-cols-[5rem_1fr_2fr] sm:items-center">
+                            <span className="text-sm font-medium text-gray-700">Unit {unitIndex + 1}</span>
+                            <input
+                              type="search"
+                              value={purchaseSearches[searchKey] || ""}
+                              onChange={(e) => setPurchaseSearches({ ...purchaseSearches, [searchKey]: e.target.value })}
+                              placeholder="Scan/type serial"
+                              aria-label={`Search serial number for unit ${unitIndex + 1}`}
+                              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                            />
+                            <select
+                              value={selected}
+                              onChange={(e) => {
+                                const next = [...(purchaseSelections[r.id] || [])];
+                                next[unitIndex] = e.target.value;
+                                setPurchaseSelections({ ...purchaseSelections, [r.id]: next });
+                              }}
+                              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                            >
+                              <option value="">Select available unit</option>
+                              <option value="purchase">Needs purchase</option>
+                              {candidates.map((asset) => (
+                                <option
+                                  key={asset.id}
+                                  value={asset.id}
+                                  disabled={(purchaseSelections[r.id] || []).some(
+                                    (assetId, index) => assetId === asset.id && index !== unitIndex,
+                                  )}
+                                >
+                                  {asset.asset_tag}{asset.serial_number ? ` · SN ${asset.serial_number}` : ""}
+                                  {asset.location ? ` · ${asset.location}` : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <label className="text-sm text-gray-700">
+                          Fulfillment
+                          <select
+                            value={purchaseModes[r.id] || "assign"}
+                            onChange={(e) => setPurchaseModes({ ...purchaseModes, [r.id]: e.target.value })}
+                            className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                          >
+                            <option value="assign">Assign permanently</option>
+                            <option value="lend">Lend (returnable)</option>
+                          </select>
+                        </label>
+                        {purchaseModes[r.id] === "lend" && (
+                          <label className="text-sm text-gray-700">
+                            Return date
+                            <input
+                              type="date"
+                              min={new Date().toISOString().slice(0, 10)}
+                              value={purchaseDueDates[r.id] || ""}
+                              onChange={(e) => setPurchaseDueDates({ ...purchaseDueDates, [r.id]: e.target.value })}
+                              className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                            />
+                          </label>
+                        )}
+                    </div>
+                  </section>
+                )}
+
                 {r.justification && (
                   <p className="mb-2 text-sm italic text-gray-600">
                     Justification: {r.justification}
@@ -446,7 +664,13 @@ export default function FinancePage() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     onClick={() => handleDecision(r.id, "approved")}
-                    disabled={processing === r.id}
+                    disabled={processing === r.id || (
+                      ["electronics", "physical_good", "other_asset"].includes(r.type) &&
+                      ((purchaseSelections[r.id] || []).length !== Math.max(1, r.quantity || 1) ||
+                        (purchaseSelections[r.id] || []).some((selection) => !selection) ||
+                        ((purchaseSelections[r.id] || []).some(Boolean) &&
+                          purchaseModes[r.id] === "lend" && !purchaseDueDates[r.id]))
+                    )}
                     className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
                   >
                     Approve
@@ -510,6 +734,50 @@ export default function FinancePage() {
                   </span>
                 </div>
 
+                {r.fulfillment_status && r.fulfillment_status !== "not_applicable" && (
+                  <p className="mt-2 text-sm font-medium capitalize text-gray-700">
+                    Fulfillment: {r.fulfillment_status.replaceAll("_", " ")}
+                  </p>
+                )}
+
+                {r.status === "approved" && r.purchase_quantity > 0 && (
+                  (() => {
+                    const receivedCount = (r.request_assets || []).filter((asset) => asset.source === "purchase").length;
+                    const remainingCount = Math.max(0, r.purchase_quantity - receivedCount);
+                    if (remainingCount === 0) return null;
+                    return (
+                      <section className="mt-3 rounded border border-amber-200 bg-amber-50 p-3">
+                        <p className="mb-2 text-sm font-medium text-amber-900">
+                          Register arrived units ({remainingCount} remaining)
+                        </p>
+                        <div className="space-y-2">
+                          {Array.from({ length: remainingCount }, (_, index) => (
+                            <input
+                              key={`${r.id}-arrival-${index}`}
+                              type="text"
+                              value={arrivalSerials[r.id]?.[index] || ""}
+                              onChange={(e) => {
+                                const next = [...(arrivalSerials[r.id] || Array(remainingCount).fill(""))];
+                                next[index] = e.target.value;
+                                setArrivalSerials({ ...arrivalSerials, [r.id]: next });
+                              }}
+                              placeholder={`Serial number for received unit ${index + 1}`}
+                              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                            />
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => registerArrivedAssets(r)}
+                          disabled={receivingRequest === r.id || !(arrivalSerials[r.id] || []).some((serial) => serial.trim())}
+                          className="mt-3 rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          {receivingRequest === r.id ? "Registering..." : "Register received units"}
+                        </button>
+                      </section>
+                    );
+                  })()
+                )}
+
                 {r.status === "approved" && (
                   <p className="mt-1 text-xs">
                     {r.tax_registered ? (
@@ -534,6 +802,22 @@ export default function FinancePage() {
                         {a.comment && ` — "${a.comment}"`}
                       </p>
                     ))}
+                  </div>
+                )}
+
+                {(r.request_assets || []).length > 0 && (
+                  <div className="mt-2 border-t pt-2 text-sm">
+                    <p className="font-medium text-gray-800">Units assigned by finance</p>
+                    <ul className="mt-1 space-y-1 text-gray-600">
+                      {r.request_assets.map((assigned) => (
+                        <li key={assigned.id}>
+                          {assigned.asset?.asset_tag || "Asset"}
+                          {assigned.asset?.serial_number ? ` · SN ${assigned.asset.serial_number}` : ""}
+                          {` · ${assigned.fulfillment_mode === "lend" ? "Lent" : "Assigned"}`}
+                          {assigned.source === "purchase" ? " · Purchased" : " · From inventory"}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>

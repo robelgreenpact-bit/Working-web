@@ -33,7 +33,7 @@ export async function GET() {
   const reservedAssetIds = new Set((activeLoans || []).map((loan) => loan.asset_id));
   const { data, error } = await serviceClient
     .from("assets")
-    .select("id, asset_tag, item_name, category, serial_number, status, location, assigned_to")
+    .select("id, asset_tag, item_name, category, electronics_subcategory, serial_number, status, location, assigned_to")
     .in("status", [...AVAILABLE_ASSET_STATUSES])
     .is("borrowed_by", null)
     .is("assigned_to", null)

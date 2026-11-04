@@ -8,8 +8,20 @@ type RequestRow = {
   type: string;
   title: string;
   estimated_cost: number;
+  fulfillment_status: string;
   status: string;
   created_at: string;
+  request_assets: {
+    id: string;
+    fulfillment_mode: string;
+    source: string;
+    due_date: string | null;
+    asset: {
+      asset_tag: string;
+      item_name: string | null;
+      serial_number: string | null;
+    } | null;
+  }[];
 };
 
 const handleDownload = (requestId: string) => {
@@ -221,6 +233,22 @@ export default function WorkerPage() {
                       >
                         {statusLabels[r.status] || r.status}
                       </span>
+                      {r.fulfillment_status && r.fulfillment_status !== "not_applicable" && (
+                        <div className="mt-1 text-xs capitalize text-gray-500">
+                          {r.fulfillment_status.replaceAll("_", " ")}
+                        </div>
+                      )}
+                      {r.request_assets?.length > 0 && (
+                        <ul className="mt-1 space-y-0.5 text-xs text-gray-600">
+                          {r.request_assets.map((assigned) => (
+                            <li key={assigned.id}>
+                              {assigned.asset?.asset_tag || "Asset"}
+                              {assigned.asset?.serial_number ? ` · SN ${assigned.asset.serial_number}` : ""}
+                              {assigned.fulfillment_mode === "lend" ? " · Lent" : " · Assigned"}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </td>
                     <td className="py-2">
                       {r.type === "per_diem" ? (

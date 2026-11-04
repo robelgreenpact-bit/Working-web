@@ -9,6 +9,20 @@ function getServiceClient() {
   );
 }
 
+type RequestAssetRow = {
+  id: string;
+  request_id: string;
+  fulfillment_mode: string;
+  source: string;
+  due_date: string | null;
+  asset: {
+    id: string;
+    asset_tag: string;
+    item_name: string | null;
+    serial_number: string | null;
+  } | null;
+};
+
 export async function GET() {
   const supabase = await createServerClient();
 
@@ -34,6 +48,22 @@ export async function GET() {
   }
 
   const serviceClient = getServiceClient();
+  const requestIds = (data || []).map((request) => request.id);
+  const { data: requestAssets, error: requestAssetsError } = requestIds.length
+    ? await serviceClient
+        .from("request_assets")
+        .select("id, request_id, fulfillment_mode, source, due_date, asset:assets(id, asset_tag, item_name, serial_number)")
+        .in("request_id", requestIds)
+    : { data: [], error: null };
+  if (requestAssetsError) {
+    return NextResponse.json({ error: requestAssetsError.message }, { status: 500 });
+  }
+  const assetsByRequest = new Map<string, RequestAssetRow[]>();
+  for (const requestAsset of (requestAssets || []) as RequestAssetRow[]) {
+    const linkedAssets = assetsByRequest.get(requestAsset.request_id) || [];
+    linkedAssets.push(requestAsset);
+    assetsByRequest.set(requestAsset.request_id, linkedAssets);
+  }
 
   const withDetails = await Promise.all(
     (data || []).map(async (req) => {
@@ -56,7 +86,12 @@ export async function GET() {
         ),
       );
 
-      return { ...req, requester, approvals: approvalsWithNames };
+      return {
+        ...req,
+        requester,
+        approvals: approvalsWithNames,
+        request_assets: assetsByRequest.get(req.id) || [],
+      };
     }),
   );
 

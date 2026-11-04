@@ -59,7 +59,7 @@ const typeConfig: Record<
   },
   electronics: {
     label: "Electronics",
-    needsCost: true,
+    needsCost: false,
     needsQuantity: true,
   },
   travel_expense: {
@@ -92,6 +92,8 @@ export default function NewRequestPage() {
   const [form, setForm] = useState({
     type: "physical_good",
     title: "",
+    item_name: "",
+    justification: "",
     description: "",
     quantity: 1,
     estimated_cost: "",
@@ -207,7 +209,9 @@ export default function NewRequestPage() {
     }
 
     const submissionTitle =
-      (form.type === "per_diem" || form.type === "other_asset") && !form.title.trim()
+      form.type === "electronics" && form.item_name.trim()
+        ? `${form.item_name.trim()} request`
+        : (form.type === "per_diem" || form.type === "other_asset") && !form.title.trim()
         ? "Perdium Request"
         : form.title;
     const submissionDescription =
@@ -218,7 +222,8 @@ export default function NewRequestPage() {
     formData.append("title", submissionTitle);
     formData.append("description", submissionDescription);
     formData.append("asset_category", form.asset_category);
-    formData.append("item_name", submissionTitle);
+    formData.append("item_name", form.item_name || submissionTitle);
+    formData.append("justification", form.justification);
     formData.append("electronics_subcategory", form.electronics_subcategory);
 
     if (config.needsQuantity) {
@@ -401,6 +406,7 @@ export default function NewRequestPage() {
                 Electronics Type
               </label>
               <select
+                required
                 value={form.electronics_subcategory}
                 onChange={(e) => setForm({ ...form, electronics_subcategory: e.target.value })}
                 className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
@@ -413,9 +419,25 @@ export default function NewRequestPage() {
             </div>
           )}
 
-          <div className="mb-4">
+          {(form.type === "electronics" || form.type === "physical_good" || form.type === "other_asset") && (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm text-gray-600">
+                Item name
+              </label>
+              <input
+                type="text"
+                value={form.item_name}
+                onChange={(e) => setForm({ ...form, item_name: e.target.value })}
+                required
+                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                placeholder="For example, Samsung Galaxy tablet"
+              />
+            </div>
+          )}
+
+          {form.type !== "electronics" && <div className="mb-4">
             <label className="mb-1 block text-sm text-gray-600">
-              Title
+              Request title
             </label>
             <input
               type="text"
@@ -425,7 +447,7 @@ export default function NewRequestPage() {
               className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
               placeholder="Enter request title"
             />
-          </div>
+          </div>}
 
           {form.type === "per_diem" ? (
             <div className="mb-6 rounded border border-amber-200 bg-amber-50 p-4">
@@ -529,6 +551,19 @@ export default function NewRequestPage() {
                 onChange={(e) =>
                   setForm({ ...form, description: e.target.value })
                 }
+                rows={3}
+                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+              />
+            </div>
+          )}
+
+          {(form.type === "electronics" || form.type === "physical_good" || form.type === "other_asset") && (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm text-gray-600">Justification</label>
+              <textarea
+                required
+                value={form.justification}
+                onChange={(e) => setForm({ ...form, justification: e.target.value })}
                 rows={3}
                 className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
               />

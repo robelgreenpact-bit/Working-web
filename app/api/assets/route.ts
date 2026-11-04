@@ -108,6 +108,12 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (category === "electronics" && !serial_number?.trim()) {
+    return NextResponse.json(
+      { error: "A serial number is required for electronics assets" },
+      { status: 400 },
+    );
+  }
 
   // Handle furniture with quantity
   if (category === "furniture" && quantity && Number(quantity) > 1) {

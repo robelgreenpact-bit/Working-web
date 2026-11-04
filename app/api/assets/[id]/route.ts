@@ -44,6 +44,22 @@ export async function PATCH(
     if (field in body) updates[field] = body[field];
   }
 
+  if ("category" in updates || "serial_number" in updates) {
+    const { data: currentAsset } = await supabase
+      .from("assets")
+      .select("category, serial_number")
+      .eq("id", id)
+      .single();
+    const nextCategory = String(updates.category ?? currentAsset?.category ?? "");
+    const nextSerial = String(updates.serial_number ?? currentAsset?.serial_number ?? "");
+    if (nextCategory === "electronics" && !nextSerial.trim()) {
+      return NextResponse.json(
+        { error: "A serial number is required for electronics assets" },
+        { status: 400 },
+      );
+    }
+  }
+
   if ("status" in updates || "assigned_to" in updates) {
     const { data: asset } = await supabase
       .from("assets")
