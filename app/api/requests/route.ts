@@ -93,6 +93,35 @@ export async function POST(request: Request) {
   if (needsAssetDetails && !justification?.trim()) {
     return NextResponse.json({ error: "Justification is required for asset requests" }, { status: 400 });
   }
+  const requestedQuantity = Number(quantity || 1);
+  if (needsAssetDetails && (!Number.isInteger(requestedQuantity) || requestedQuantity < 1)) {
+    return NextResponse.json({ error: "Quantity must be a positive whole number" }, { status: 400 });
+  }
+
+  let canonicalItemName = (itemName || title).normalize("NFKC").trim().replace(/\s+/g, " ");
+  if (needsAssetDetails) {
+    const serviceClient = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    let itemQuery = serviceClient
+      .from("assets")
+      .select("item_name")
+      .eq("category", assetCategory)
+      .not("item_name", "is", null);
+    if (type === "electronics") {
+      itemQuery = itemQuery.eq("electronics_subcategory", electronicsSubcategory);
+    }
+    const { data: catalogItems, error: catalogError } = await itemQuery;
+    if (catalogError) {
+      return NextResponse.json({ error: catalogError.message }, { status: 500 });
+    }
+    const normalizedName = canonicalItemName.toLocaleLowerCase();
+    const canonicalMatch = (catalogItems || []).find(
+      (item) => item.item_name?.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase() === normalizedName,
+    );
+    if (canonicalMatch?.item_name) canonicalItemName = canonicalMatch.item_name.trim().replace(/\s+/g, " ");
+  }
 
   const { data: newRequest, error } = await supabase
     .from("requests")
@@ -101,10 +130,10 @@ export async function POST(request: Request) {
       type,
       title,
       description: description || null,
-      quantity: needsCost ? (quantity ? Number(quantity) : 1) : null,
+      quantity: needsAssetDetails ? requestedQuantity : needsCost ? (quantity ? Number(quantity) : 1) : null,
       estimated_cost: needsCost ? Number(estimated_cost) : 0,
       asset_category: needsAssetDetails ? assetCategory : null,
-      item_name: needsAssetDetails ? (itemName || title) : null,
+      item_name: needsAssetDetails ? canonicalItemName : null,
       electronics_subcategory: type === "electronics" ? electronicsSubcategory || null : null,
       justification: justification || null,
       status: "pending_manager",

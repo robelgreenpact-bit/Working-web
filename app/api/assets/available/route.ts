@@ -21,6 +21,15 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from("public_users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "finance", "manager"].includes(profile.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const serviceClient = getServiceClient();
   const { data: activeLoans, error: loansError } = await serviceClient
     .from("asset_loans")

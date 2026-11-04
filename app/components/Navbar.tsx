@@ -89,7 +89,8 @@ export default function Navbar({ title }: { title: string }) {
             ? "/accountant"
             : "/worker";
 
-  const canSeeAssets = Boolean(role && role !== "accountant");
+  const canSeeAssets =
+    role === "admin" || role === "manager" || role === "finance";
   const canSeeReports =
     role === "admin" || role === "manager" || role === "finance";
   const canSeeTaxRegistry =

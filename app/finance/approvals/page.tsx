@@ -275,7 +275,10 @@ export default function FinancePage() {
     setProcessing(null);
 
     if (!res.ok) {
-      alert(data.error || "Failed to submit decision");
+      const errorMessage = data.error || "Failed to submit decision";
+      alert(/no longer match|unavailable|just assigned|refresh the list/i.test(errorMessage)
+        ? "One or more selected units were just taken. Refresh the approvals list and choose another unit."
+        : errorMessage);
       return;
     }
 
@@ -362,6 +365,12 @@ export default function FinancePage() {
                   )}
                 </div>
 
+                {r.justification && (
+                  <p className="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-gray-700">
+                    Justification: {r.justification}
+                  </p>
+                )}
+
                 {["electronics", "physical_good", "other_asset"].includes(r.type) && (
                   <section className="mb-4 rounded border border-gray-200 bg-gray-50 p-4">
                     <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -377,6 +386,16 @@ export default function FinancePage() {
                         {compatibleAssets(r).length} matching units available
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setPurchaseSelections({
+                        ...purchaseSelections,
+                        [r.id]: Array(Math.max(1, r.quantity || 1)).fill("purchase"),
+                      })}
+                      className="mb-3 rounded bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900 hover:bg-amber-200"
+                    >
+                      Mark all as needs purchase
+                    </button>
 
                     <div className="space-y-3">
                       {Array.from({ length: Math.max(1, r.quantity || 1) }, (_, unitIndex) => {
@@ -453,12 +472,6 @@ export default function FinancePage() {
                         )}
                     </div>
                   </section>
-                )}
-
-                {r.justification && (
-                  <p className="mb-2 text-sm italic text-gray-600">
-                    Justification: {r.justification}
-                  </p>
                 )}
 
                 {r.attachments && r.attachments.length > 0 && (

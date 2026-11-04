@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 
@@ -76,6 +76,8 @@ const typeConfig: Record<
 };
 
 export default function NewRequestPage() {
+  const [inventoryItemNames, setInventoryItemNames] = useState<string[]>([]);
+  const [customItemName, setCustomItemName] = useState("");
   const [form, setForm] = useState({
     type: "physical_good",
     title: "",
@@ -107,6 +109,24 @@ export default function NewRequestPage() {
   const router = useRouter();
 
   const config = typeConfig[form.type];
+
+  useEffect(() => {
+    const category = form.type === "electronics"
+      ? "electronics"
+      : ["physical_good", "other_asset"].includes(form.type)
+        ? form.asset_category
+        : "";
+    if (!category) return;
+
+    const params = new URLSearchParams({ category });
+    if (category === "electronics" && form.electronics_subcategory) {
+      params.set("subcategory", form.electronics_subcategory);
+    }
+    fetch(`/api/assets/item-names?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => setInventoryItemNames(data.item_names || []))
+      .catch(() => setInventoryItemNames([]));
+  }, [form.type, form.asset_category, form.electronics_subcategory]);
 
   const buildPerDiemDescription = () => {
     const lines = [
@@ -145,15 +165,17 @@ export default function NewRequestPage() {
   };
 
   const handleTypeChange = (value: string) => {
+    setInventoryItemNames([]);
+    setCustomItemName("");
     setForm((prev) => ({
       ...prev,
       type: value,
+      item_name: "",
       description:
         value === "per_diem" ? perDiemTemplate : "",
       asset_category:
         value === "electronics" ? "electronics" : prev.asset_category,
-      electronics_subcategory:
-        value === "electronics" ? prev.electronics_subcategory : "",
+      electronics_subcategory: "",
     }));
   };
 
@@ -162,9 +184,10 @@ export default function NewRequestPage() {
     setError("");
     setLoading(true);
 
+    const requestedItemName = (form.item_name === "__custom__" ? customItemName : form.item_name).trim();
     const submissionTitle =
-      form.type === "electronics" && form.item_name.trim()
-        ? `${form.item_name.trim()} request`
+      form.type === "electronics" && requestedItemName
+        ? `${requestedItemName} request`
         : (form.type === "per_diem" || form.type === "other_asset") && !form.title.trim()
         ? "Perdium Request"
         : form.title;
@@ -176,7 +199,7 @@ export default function NewRequestPage() {
     formData.append("title", submissionTitle);
     formData.append("description", submissionDescription);
     formData.append("asset_category", form.asset_category);
-    formData.append("item_name", form.item_name || submissionTitle);
+    formData.append("item_name", requestedItemName || submissionTitle);
     formData.append("justification", form.justification);
     formData.append("electronics_subcategory", form.electronics_subcategory);
 
@@ -250,7 +273,11 @@ export default function NewRequestPage() {
               <select
                 required
                 value={form.asset_category}
-                onChange={(e) => setForm({ ...form, asset_category: e.target.value })}
+                onChange={(e) => {
+                  setInventoryItemNames([]);
+                  setCustomItemName("");
+                  setForm({ ...form, asset_category: e.target.value, item_name: "" });
+                }}
                 className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
               >
                 <option value="">Select category</option>
@@ -271,7 +298,11 @@ export default function NewRequestPage() {
               <select
                 required
                 value={form.electronics_subcategory}
-                onChange={(e) => setForm({ ...form, electronics_subcategory: e.target.value })}
+                onChange={(e) => {
+                  setInventoryItemNames([]);
+                  setCustomItemName("");
+                  setForm({ ...form, item_name: "", electronics_subcategory: e.target.value });
+                }}
                 className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
               >
                 <option value="">— Select type —</option>
@@ -287,14 +318,43 @@ export default function NewRequestPage() {
               <label className="mb-1 block text-sm text-gray-600">
                 Item name
               </label>
-              <input
-                type="text"
-                value={form.item_name}
-                onChange={(e) => setForm({ ...form, item_name: e.target.value })}
-                required
-                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                placeholder="For example, Samsung Galaxy tablet"
-              />
+              {inventoryItemNames.length > 0 ? (
+                <select
+                  required
+                  value={form.item_name}
+                  onChange={(e) => {
+                    setForm({ ...form, item_name: e.target.value });
+                    setCustomItemName("");
+                  }}
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                >
+                  <option value="">Select an item name</option>
+                  {inventoryItemNames.map((name) => <option key={name} value={name}>{name}</option>)}
+                  <option value="__custom__">Other / not listed</option>
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={form.item_name === "__custom__" ? customItemName : form.item_name}
+                  onChange={(e) => {
+                    setForm({ ...form, item_name: "__custom__" });
+                    setCustomItemName(e.target.value);
+                  }}
+                  required
+                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                  placeholder="For example, Samsung Galaxy tablet"
+                />
+              )}
+              {form.item_name === "__custom__" && inventoryItemNames.length > 0 && (
+                <input
+                  type="text"
+                  value={customItemName}
+                  onChange={(e) => setCustomItemName(e.target.value)}
+                  required
+                  placeholder="Enter item name"
+                  className="mt-2 w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                />
+              )}
             </div>
           )}
 
