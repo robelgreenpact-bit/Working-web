@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Navbar from "@/app/components/Navbar";
 
 type Asset = {
@@ -27,916 +27,1147 @@ type UserOption = {
   name: string;
 };
 
-type LoanQueueRequest = {
-  id: string;
-  purpose: string;
-  requester: { name: string; email: string } | null;
-  items: {
-    id: string;
-    asset_id: string;
-    status: string;
-    due_date: string | null;
-    borrowed_at: string | null;
-    returned_at: string | null;
-    return_condition: string | null;
-    return_note: string | null;
-    asset: {
-      asset_tag: string;
-      item_name: string | null;
-      serial_number: string | null;
-      location?: string | null;
-    } | null;
-  }[];
+type AssetForm = {
+  category: string;
+  electronics_subcategory: string;
+  item_name: string;
+  serial_number: string;
+  assigned_to: string;
+  purchase_cost: string;
+  purchase_date: string;
+  status: string;
+  location: string;
+  quantity: string;
 };
 
-type PendingReturn = Omit<LoanQueueRequest, "items"> & {
-  item: LoanQueueRequest["items"][number];
+const emptyForm: AssetForm = {
+  category: "",
+  electronics_subcategory: "",
+  item_name: "",
+  serial_number: "",
+  assigned_to: "",
+  purchase_cost: "",
+  purchase_date: "",
+  status: "new",
+  location: "",
+  quantity: "1",
 };
 
-const statusColors: Record<string, string> = {
-  new: "bg-blue-100 text-blue-800",
-  in_use: "bg-green-100 text-green-800",
-  under_repair: "bg-amber-100 text-amber-800",
-  retired: "bg-gray-200 text-gray-600",
+const categoryLabels: Record<string, string> = {
+  electronics: "Electronics",
+  furniture: "Furniture",
+  vehicle: "Vehicles",
+  office_supplies: "Office Supplies",
+  other: "Other",
 };
+
+const conditionLabels: Record<string, string> = {
+  new: "New",
+  in_use: "Serviceable",
+  under_repair: "Under Repair",
+  retired: "Retired",
+};
+
+const inputClass =
+  "mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-brand-deep focus:outline-none focus:ring-2 focus:ring-brand-deep/20";
+
+const buttonClass =
+  "rounded-lg bg-brand-deep px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50";
+
+function isEquipment(asset: {
+  category: string;
+  electronics_subcategory: string | null;
+}) {
+  return (
+    asset.category === "electronics" &&
+    ["tablet", "pc"].includes(asset.electronics_subcategory || "")
+  );
+}
+
+function hasActiveLoan(asset: Asset) {
+  return Boolean(asset.borrowed_by || asset.return_requested);
+}
+
+function isAvailable(asset: Asset) {
+  return (
+    !hasActiveLoan(asset) &&
+    !asset.assigned_to &&
+    ["new", "in_use"].includes(asset.status)
+  );
+}
+
+function holdingStatus(asset: Asset) {
+  if (asset.return_requested) return "Return requested";
+  if (asset.borrowed_by) return "Borrowed";
+  if (asset.status === "under_repair") return "Under Repair";
+  if (asset.status === "retired") return "Retired";
+  if (asset.assigned_to) return "Assigned";
+  if (isAvailable(asset)) return "Available";
+  return "Unavailable";
+}
+
+function statusColor(asset: Asset) {
+  switch (holdingStatus(asset)) {
+    case "Available":
+      return "bg-green-100 text-green-800";
+    case "Borrowed":
+      return "bg-blue-100 text-blue-800";
+    case "Return requested":
+      return "bg-orange-100 text-orange-800";
+    case "Under Repair":
+      return "bg-amber-100 text-amber-800";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "Something went wrong. Please try again.";
+}
+
+async function readResponse(response: Response) {
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(data?.error || "The request could not be completed.");
+  }
+
+  if (!data) {
+    throw new Error("The server returned an empty response.");
+  }
+
+  return data;
+}
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [role, setRole] = useState<string | null>(null);
-  const [pendingHandovers, setPendingHandovers] = useState<LoanQueueRequest[]>([]);
-  const [pendingReturns, setPendingReturns] = useState<PendingReturn[]>([]);
-  const [loanHistory, setLoanHistory] = useState<PendingReturn[]>([]);
-  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-  const [returnConditions, setReturnConditions] = useState<Record<string, string>>({});
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [userLoadError, setUserLoadError] = useState("");
+
   const [showForm, setShowForm] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [filter, setFilter] = useState("all");
-  const [registryTab, setRegistryTab] = useState("all");
-  const [assetSearch, setAssetSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [locationFilter, setLocationFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [form, setForm] = useState<AssetForm>({ ...emptyForm });
 
-  const [form, setForm] = useState({
-    category: "",
-    electronics_subcategory: "",
-    item_name: "",
-    serial_number: "",
-    assigned_to: "",
-    purchase_cost: "",
-    purchase_date: "",
-    status: "new",
-    location: "",
-    quantity: "",
-  });
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
 
-  const loadAssets = async () => {
-    const res = await fetch("/api/assets");
-    const data = await res.json();
-    setAssets(data.assets || []);
-    setLoading(false);
-  };
-
-  const loadLoanQueue = async () => {
-    const res = await fetch("/api/admin/asset-loans");
-    if (!res.ok) return;
-    const data = await res.json();
-    setPendingHandovers(data.handovers || []);
-    setPendingReturns(data.returns || []);
-    setLoanHistory(data.history || []);
-  };
+  const canManage = role === "admin" || role === "finance";
+  const equipmentForm = isEquipment(form);
+  const editingAsset = assets.find((asset) => asset.id === editingId);
 
   useEffect(() => {
-    fetch("/api/assets")
-      .then((res) => res.json())
-      .then((data) => {
-        setAssets(data.assets || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-    fetch("/api/admin/asset-loans")
-      .then(async (res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data) return;
-        setPendingHandovers(data.handovers || []);
-        setPendingReturns(data.returns || []);
-        setLoanHistory(data.history || []);
-      })
-      .catch(() => {});
-    fetch("/api/dashboard-role")
-      .then((res) => res.json())
-      .then((data) => setRole(data.role || null));
-    fetch("/api/users/list")
-      .then((res) => res.json())
-      .then((data) => setUsers(data.users || []))
-      .catch(() => {});
+    const controller = new AbortController();
+
+    async function initialize() {
+      try {
+        const profileResponse = await fetch("/api/dashboard-role", {
+          signal: controller.signal,
+        });
+        const profile = await readResponse(profileResponse);
+
+        if (controller.signal.aborted) return;
+
+        setRole(profile.role || null);
+
+        const assetsResponse = await fetch("/api/assets", {
+          signal: controller.signal,
+        });
+        const assetData = await readResponse(assetsResponse);
+
+        if (controller.signal.aborted) return;
+
+        setAssets(assetData.assets || []);
+
+        if (["admin", "finance"].includes(profile.role)) {
+          try {
+            const usersResponse = await fetch("/api/users/list", {
+              signal: controller.signal,
+            });
+            const userData = await readResponse(usersResponse);
+
+            if (!controller.signal.aborted) {
+              setUsers(userData.users || []);
+            }
+          } catch {
+            if (!controller.signal.aborted) {
+              setUserLoadError(
+                "The staff list could not be loaded. Existing assignments will be preserved.",
+              );
+            }
+          }
+        }
+      } catch (loadError) {
+        if (!controller.signal.aborted) {
+          setError(errorMessage(loadError));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void initialize();
+
+    return () => controller.abort();
   }, []);
 
-  const canAdd = role === "admin" || role === "finance";
-  const canEdit = role === "admin" || role === "finance";
+  async function loadAssets() {
+    const response = await fetch("/api/assets");
+    const data = await readResponse(response);
+    setAssets(data.assets || []);
+  }
 
-  const resetForm = () => {
-    setForm({
-      category: "",
-      electronics_subcategory: "",
-      item_name: "",
-      serial_number: "",
-      assigned_to: "",
-      purchase_cost: "",
-      purchase_date: "",
-      status: "new",
-      location: "",
-      quantity: "",
-    });
+  async function refreshAssets() {
+    setLoading(true);
+    setError("");
+
+    try {
+      await loadAssets();
+    } catch (refreshError) {
+      setError(errorMessage(refreshError));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function closeForm() {
+    setShowForm(false);
     setEditingId(null);
-  };
+    setForm({ ...emptyForm });
+  }
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
+  function openNewForm() {
+    setError("");
+    setNotice("");
+    setEditingId(null);
+    setForm({ ...emptyForm });
+    setShowForm(true);
+  }
 
-    const payload = {
-      ...form,
-      purchase_cost: form.purchase_cost ? Number(form.purchase_cost) : null,
-      assigned_to: form.assigned_to || null,
-      electronics_subcategory: form.electronics_subcategory || null,
-      serial_number: form.serial_number || null,
-      quantity: form.quantity ? Number(form.quantity) : null,
-    };
+  function openEditForm(asset: Asset) {
+    if (!canManage) return;
 
-    const res = editingId
-      ? await fetch(`/api/assets/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-      : await fetch("/api/assets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-    const data = await res.json();
-    setCreating(false);
-
-    if (!res.ok) {
-      alert(data.error || "Failed to save asset");
+    if (hasActiveLoan(asset)) {
+      setError(
+        "This device is borrowed or awaiting return confirmation. Complete its return on the Borrowed page before editing.",
+      );
       return;
     }
 
-    resetForm();
-    setShowForm(false);
-    loadAssets();
-  };
+    setError("");
+    setNotice("");
+    setEditingId(asset.id);
 
-  const handleEditClick = (asset: Asset) => {
     setForm({
-      category: asset.category,
+      category: asset.category || "",
       electronics_subcategory: asset.electronics_subcategory || "",
       item_name: asset.item_name || "",
       serial_number: asset.serial_number || "",
       assigned_to: asset.assigned_to || "",
-      purchase_cost: asset.purchase_cost ? String(asset.purchase_cost) : "",
-      purchase_date: asset.purchase_date || "",
-      status: asset.status,
+      purchase_cost:
+        asset.purchase_cost === null ? "" : String(asset.purchase_cost),
+      purchase_date: asset.purchase_date?.slice(0, 10) || "",
+      status: asset.status || "new",
       location: asset.location || "",
-      quantity: asset.quantity ? String(asset.quantity) : "",
+      quantity: String(asset.quantity || 1),
     });
-    setEditingId(asset.id);
+
     setShowForm(true);
-    // Scroll to form
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 100);
-  };
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  const handleCancelForm = () => {
-    resetForm();
-    setShowForm(false);
-  };
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-  const handleStatusChange = async (id: string, status: string) => {
-    if (!confirm(`Change this asset's condition to ${status.replaceAll("_", " ")}?`)) return;
-    await fetch(`/api/assets/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    loadAssets();
-  };
+    if (!canManage || saving) return;
 
-  const handleDelete = async (id: string) => {
-    if (assets.find((asset) => asset.id === id)?.borrowed_by) {
-      alert("Borrowed assets cannot be deleted.");
+    setError("");
+    setNotice("");
+
+    if (!form.category || !form.item_name.trim()) {
+      setError("Select a category and enter an item name.");
       return;
     }
-    if (!confirm("Delete this asset record? This cannot be undone.")) return;
-    const res = await fetch(`/api/assets/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const data = await res.json();
-      alert(data.error || "Failed to delete asset");
-      return;
-    }
-    loadAssets();
-  };
 
-  const handleConfirmReturn = async (id: string) => {
-    if (!confirm("Confirm this asset has been returned?")) return;
-    const pendingReturn = pendingReturns.find((entry) => entry.item.asset_id === id);
-    if (!pendingReturn) {
-      alert("This return is not in the pending returns queue.");
+    if (
+      form.category === "electronics" &&
+      !form.electronics_subcategory
+    ) {
+      setError("Select the electronics type.");
       return;
     }
-    const res = await fetch(`/api/admin/asset-loans/${pendingReturn.item.id}/confirm-return`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        return_condition:
-          returnConditions[pendingReturn.item.id] || pendingReturn.item.return_condition || "good",
-        note: pendingReturn.item.return_note || "",
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.error || "Failed to confirm return");
-      return;
-    }
-    loadAssets();
-    loadLoanQueue();
-  };
 
-  const handleIssueLoan = async (requestId: string) => {
-    if (!confirm("Confirm handover of all assets in this approved request?")) return;
-    const res = await fetch(`/api/admin/asset-loans/${requestId}/issue`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.error || "Failed to issue assets");
+    if (equipmentForm && !form.serial_number.trim()) {
+      setError("Enter the serial number for this device.");
       return;
     }
-    loadAssets();
-    loadLoanQueue();
-  };
 
-  const registryAssets = registryTab === "borrowed"
-    ? assets.filter((asset) => Boolean(asset.borrowed_by))
-    : registryTab === "return_pending"
-      ? assets.filter((asset) => asset.return_requested)
-      : assets;
-  const filteredAssets = registryAssets.filter((asset) => {
-    const matchesStatus = filter === "all" || asset.status === filter;
-    const matchesCategory = categoryFilter === "all" || asset.category === categoryFilter;
-    const matchesLocation = locationFilter === "all" || asset.location === locationFilter;
-    const search = assetSearch.trim().toLowerCase();
-    const matchesSearch = !search || [asset.item_name, asset.asset_tag, asset.serial_number]
-      .some((value) => value?.toLowerCase().includes(search));
-    return matchesStatus && matchesCategory && matchesLocation && matchesSearch;
-  });
-  const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) || null;
-  const selectedAssetLoans = loanHistory.filter(
-    (entry) => entry.item.asset_id === selectedAssetId,
-  );
+    if (equipmentForm && !form.location.trim()) {
+      setError("Enter the device location.");
+      return;
+    }
+
+    if (editingAsset && hasActiveLoan(editingAsset)) {
+      setError("This device must be returned before it can be edited.");
+      return;
+    }
+
+    if (
+      form.category === "furniture" &&
+      (!Number.isSafeInteger(Number(form.quantity)) ||
+        Number(form.quantity) < 1)
+    ) {
+      setError("Furniture quantity must be a positive whole number.");
+      return;
+    }
+
+    const serial = form.serial_number.trim();
+
+    if (
+      equipmentForm &&
+      assets.some(
+        (asset) =>
+          asset.id !== editingId &&
+          asset.serial_number?.trim().toLowerCase() ===
+            serial.toLowerCase(),
+      )
+    ) {
+      setError(
+        "An asset with this serial number already exists. Check the existing record.",
+      );
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      category: form.category,
+      electronics_subcategory:
+        form.category === "electronics"
+          ? form.electronics_subcategory
+          : null,
+      item_name: form.item_name.trim(),
+      serial_number: serial || null,
+      location: form.location.trim() || null,
+      status: form.status,
+    };
+
+    if (equipmentForm) {
+      // A Tablet or PC is always one physical device per record.
+      payload.quantity = 1;
+
+      // New devices start unassigned.
+      // Existing assignments are not silently cleared during edits.
+      if (!editingId) {
+        payload.assigned_to = null;
+      }
+
+      // Do not overwrite historical purchase information.
+    } else {
+      payload.assigned_to = form.assigned_to || null;
+      payload.purchase_cost =
+        form.purchase_cost === "" ? null : Number(form.purchase_cost);
+      payload.purchase_date = form.purchase_date || null;
+      payload.quantity =
+        form.category === "furniture"
+          ? Number(form.quantity)
+          : editingAsset?.quantity ?? null;
+    }
+
+    setSaving(true);
+
+    try {
+      const response = await fetch(
+        editingId ? `/api/assets/${editingId}` : "/api/assets",
+        {
+          method: editingId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+
+      await readResponse(response);
+
+      const wasEditing = Boolean(editingId);
+      closeForm();
+
+      setNotice(
+        wasEditing
+          ? "Asset updated successfully."
+          : "Asset registered successfully.",
+      );
+
+      try {
+        await loadAssets();
+      } catch {
+        setError(
+          "The asset was saved, but the list could not refresh. Click Refresh; do not submit the same device again.",
+        );
+      }
+    } catch (saveError) {
+      setError(errorMessage(saveError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(asset: Asset) {
+    if (!canManage || busyId || saving) return;
+
+    if (hasActiveLoan(asset) || asset.assigned_to) {
+      setError(
+        "Borrowed or assigned assets cannot be deleted from this page.",
+      );
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Delete ${asset.asset_tag}? This cannot be undone. Devices with loan history should be retired instead.`,
+      )
+    ) {
+      return;
+    }
+
+    setError("");
+    setNotice("");
+    setBusyId(asset.id);
+
+    try {
+      const response = await fetch(`/api/assets/${asset.id}`, {
+        method: "DELETE",
+      });
+
+      await readResponse(response);
+
+      if (editingId === asset.id) closeForm();
+
+      setNotice("Asset deleted successfully.");
+
+      try {
+        await loadAssets();
+      } catch {
+        setError("The asset was deleted. Click Refresh to reload the list.");
+      }
+    } catch (deleteError) {
+      setError(errorMessage(deleteError));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const locations = Array.from(
+    new Set(
+      [
+        "Bahir Dar Office",
+        "Addis Ababa Office",
+        ...assets.map((asset) => asset.location || ""),
+      ].filter(Boolean),
+    ),
+  ).sort();
+
+  const itemNames = Array.from(
+    new Set(
+      assets
+        .filter(
+          (asset) =>
+            asset.category === form.category &&
+            (form.category !== "electronics" ||
+              asset.electronics_subcategory ===
+                form.electronics_subcategory),
+        )
+        .map((asset) => asset.item_name || "")
+        .filter(Boolean),
+    ),
+  ).sort();
+
+  const filteredAssets = assets
+    .filter((asset) => {
+      const text = search.trim().toLowerCase();
+
+      const searchableValues = [
+        asset.item_name,
+        asset.asset_tag,
+        ...(canManage ? [asset.serial_number] : []),
+      ];
+
+      return (
+        (!text ||
+          searchableValues.some((value) =>
+            value?.toLowerCase().includes(text),
+          )) &&
+        (categoryFilter === "all" ||
+          asset.category === categoryFilter) &&
+        (typeFilter === "all" ||
+          (asset.category === "electronics" &&
+            asset.electronics_subcategory === typeFilter)) &&
+        (locationFilter === "all" ||
+          asset.location === locationFilter) &&
+        (statusFilter === "all" ||
+          holdingStatus(asset) === statusFilter)
+      );
+    })
+    .sort(
+      (a, b) =>
+        (a.item_name || "").localeCompare(b.item_name || "") ||
+        a.asset_tag.localeCompare(b.asset_tag),
+    );
+
+  const summaries = [
+    { label: "Total", count: assets.length },
+    {
+      label: "Available",
+      count: assets.filter(isAvailable).length,
+    },
+    {
+      label: "Borrowed",
+      count: assets.filter((asset) => Boolean(asset.borrowed_by)).length,
+    },
+    {
+      label: "Under Repair",
+      count: assets.filter(
+        (asset) => asset.status === "under_repair",
+      ).length,
+    },
+    {
+      label: "Retired",
+      count: assets.filter((asset) => asset.status === "retired").length,
+    },
+  ];
 
   return (
     <div>
       <Navbar title="Asset Registry" />
-      <div className="mx-auto max-w-7xl p-8">
-        <div className="mb-8 flex items-center justify-between fade-in">
+
+      <main className="mx-auto max-w-7xl p-4 sm:p-8">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-brand-deep">Asset Registry</h1>
-            <p className="mt-1 text-sm text-gray-500">Manage and track all company assets</p>
+            <h1 className="text-3xl font-bold text-brand-deep">
+              Asset Registry
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Register each Tablet or PC once, as an individual device.
+            </p>
           </div>
-          {canAdd && (
-            <button
-              onClick={() =>
-                showForm ? handleCancelForm() : setShowForm(true)
-              }
-              className="rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
+
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/assets/borrowed"
+              className="rounded-lg border border-brand-deep px-4 py-2.5 text-sm font-medium text-brand-deep"
             >
-              {showForm ? "Cancel" : "+ Add Asset"}
-            </button>
-          )}
+              Borrowed & Returns
+            </a>
+
+            {["admin", "finance", "manager"].includes(role || "") && (
+              <a
+                href="/assets/inventory"
+                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700"
+              >
+                Inventory
+              </a>
+            )}
+
+            {canManage && (
+              <button
+                type="button"
+                disabled={saving || Boolean(busyId)}
+                onClick={showForm ? closeForm : openNewForm}
+                className={buttonClass}
+              >
+                {showForm ? "Close form" : "+ Register asset"}
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            { label: "Total", value: assets.length, color: "text-brand-deep" },
-            { label: "Available", value: assets.filter((asset) => !asset.borrowed_by && !asset.assigned_to && ["new", "in_use"].includes(asset.status)).length, color: "text-green-700" },
-            { label: "Borrowed", value: assets.filter((asset) => Boolean(asset.borrowed_by)).length, color: "text-amber-700" },
-            { label: "Return Pending", value: assets.filter((asset) => asset.return_requested).length, color: "text-orange-700" },
-            { label: "Under Repair", value: assets.filter((asset) => asset.status === "under_repair").length, color: "text-red-700" },
-          ].map((summary) => (
-            <div key={summary.label} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-sm font-medium text-gray-500">{summary.label}</p>
-              <p className={`mt-2 text-2xl font-bold ${summary.color}`}>{summary.value}</p>
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          >
+            {error}
+          </div>
+        )}
+
+        {notice && (
+          <div
+            role="status"
+            className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+          >
+            {notice}
+          </div>
+        )}
+
+        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+          {summaries.map((summary) => (
+            <div
+              key={summary.label}
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+            >
+              <p className="text-sm text-gray-500">{summary.label}</p>
+              <p className="mt-2 text-3xl font-bold text-brand-deep">
+                {loading ? "—" : summary.count}
+              </p>
             </div>
           ))}
         </div>
 
-        {role === "admin" && (
-          <section className="mb-8 grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold text-brand-deep">Pending handovers</h2>
-              {pendingHandovers.length === 0 ? (
-                <p className="text-sm text-gray-500">No approved borrow requests awaiting issue.</p>
-              ) : (
-                <div className="space-y-3">
-                  {pendingHandovers.map((request) => (
-                    <div key={request.id} className="border-b border-gray-100 pb-3 last:border-0">
-                      <p className="font-medium">{request.purpose}</p>
-                      <p className="mb-2 text-xs text-gray-500">{request.requester?.name || "Borrower"}</p>
-                      <ul className="mb-3 text-sm text-gray-700">
-                        {request.items.map((item) => (
-                          <li key={item.id}>
-                            {item.asset?.item_name || "Asset"} · {item.asset?.asset_tag}
-                            {item.asset?.serial_number ? ` · SN ${item.asset.serial_number}` : ""}
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        onClick={() => handleIssueLoan(request.id)}
-                        className="rounded bg-brand-deep px-3 py-2 text-xs font-medium text-white"
-                      >
-                        Confirm handover
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        <p className="mb-6 text-sm text-gray-500">
+          Borrowed totals include devices awaiting return confirmation.
+          Manage returns and loan history on the Borrowed page.
+        </p>
 
-            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold text-brand-deep">Pending returns</h2>
-              {pendingReturns.length === 0 ? (
-                <p className="text-sm text-gray-500">No returns waiting for confirmation.</p>
-              ) : (
-                <div className="space-y-3">
-                  {pendingReturns.map((entry) => (
-                    <div key={entry.item.id} className="border-b border-gray-100 pb-3 last:border-0">
-                      <p className="font-medium">
-                        {entry.item.asset?.item_name || "Asset"} · {entry.item.asset?.asset_tag}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {entry.requester?.name || "Borrower"} · Reported condition: {entry.item.return_condition || "Not provided"}
-                      </p>
-                      {entry.item.return_note && <p className="my-1 text-sm text-gray-700">{entry.item.return_note}</p>}
-                      <div className="mt-2 flex gap-2">
-                        <select
-                          aria-label="Confirmed return condition"
-                          value={returnConditions[entry.item.id] || entry.item.return_condition || "good"}
-                          onChange={(e) => setReturnConditions({ ...returnConditions, [entry.item.id]: e.target.value })}
-                          className="rounded border border-gray-300 p-2 text-xs text-gray-900"
-                        >
-                          <option value="good">Good</option>
-                          <option value="damaged">Damaged</option>
-                          <option value="lost">Lost</option>
-                        </select>
-                        <button
-                          onClick={() => handleConfirmReturn(entry.item.asset_id)}
-                          className="rounded bg-green-700 px-3 py-2 text-xs font-medium text-white"
-                        >
-                          Confirm return
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {showForm && (
+        {showForm && canManage && (
           <form
-            onSubmit={handleCreate}
-            className="mb-8 grid grid-cols-1 gap-4 rounded-2xl border-t-4 border-brand bg-white/95 backdrop-blur-sm p-8 shadow-xl fade-in sm:grid-cols-2"
+            onSubmit={handleSave}
+            className="mb-8 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6"
           >
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Category
-              </label>
-              <select
-                required
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value, electronics_subcategory: "" })}
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-              >
-                <option value="">— Select category —</option>
-                <option value="electronics">Electronics</option>
-                <option value="furniture">Furniture</option>
-                <option value="vehicle">Vehicle</option>
-                <option value="office_supplies">Office Supplies</option>
-                <option value="other">Other</option>
-              </select>
+            <div className="mb-5">
+              <h2 className="text-xl font-semibold text-brand-deep">
+                {editingId ? "Edit asset" : "Register asset"}
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                {editingAsset
+                  ? `Asset code: ${editingAsset.asset_tag}`
+                  : "The asset code is generated automatically when saved."}
+              </p>
             </div>
 
-            {form.category === "electronics" && (
-              <>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Electronics Type
-                  </label>
+            <fieldset
+              disabled={saving}
+              className="grid gap-4 sm:grid-cols-2"
+            >
+              <label className="text-sm font-medium text-gray-700">
+                Category
+                <select
+                  required
+                  value={form.category}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      category: event.target.value,
+                      electronics_subcategory: "",
+                      assigned_to: editingAsset?.assigned_to || "",
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="">Select category</option>
+                  {Object.entries(categoryLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {form.category === "electronics" && (
+                <label className="text-sm font-medium text-gray-700">
+                  Electronics type
                   <select
+                    required
                     value={form.electronics_subcategory}
-                    onChange={(e) => setForm({ ...form, electronics_subcategory: e.target.value })}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
+                    onChange={(event) =>
+                      setForm((previous) => ({
+                        ...previous,
+                        electronics_subcategory: event.target.value,
+                      }))
+                    }
+                    className={inputClass}
                   >
-                    <option value="">— Select type —</option>
+                    <option value="">Select type</option>
                     <option value="tablet">Tablet</option>
                     <option value="pc">PC</option>
                     <option value="other">Other</option>
                   </select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Serial Number
-                  </label>
-                  <input
-                    type="text"
-                    value={form.serial_number}
-                    onChange={(e) => setForm({ ...form, serial_number: e.target.value })}
-                    placeholder="e.g. SN123456789"
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Item Name
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Dell Laptop, Office Chair"
-                value={form.item_name}
-                onChange={(e) =>
-                  setForm({ ...form, item_name: e.target.value })
-                }
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-              />
-            </div>
-
-            {form.category === "furniture" && (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Quantity
                 </label>
+              )}
+
+              <label className="text-sm font-medium text-gray-700">
+                Item name
                 <input
-                  type="number"
-                  min={1}
                   required
-                  value={form.quantity}
-                  onChange={(e) =>
-                    setForm({ ...form, quantity: e.target.value })
+                  type="text"
+                  list="registered-item-names"
+                  value={form.item_name}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      item_name: event.target.value,
+                    }))
                   }
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
+                  placeholder="For example: Samsung Galaxy Tab A9"
+                  className={inputClass}
                 />
-              </div>
-            )}
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Assigned To
+                <datalist id="registered-item-names">
+                  {itemNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  Use the same item name for devices of the same model.
+                </span>
               </label>
-              <select
-                value={form.assigned_to}
-                onChange={(e) =>
-                  setForm({ ...form, assigned_to: e.target.value })
-                }
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-              >
-                <option value="">— Unassigned —</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Purchase Cost (ETB)
+              <label className="text-sm font-medium text-gray-700">
+                Serial number {equipmentForm ? "" : "(optional)"}
+                <input
+                  required={equipmentForm}
+                  type="text"
+                  value={form.serial_number}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      serial_number: event.target.value,
+                    }))
+                  }
+                  placeholder="Serial number printed on the device"
+                  className={inputClass}
+                />
               </label>
-              <input
-                type="number"
-                min={0}
-                value={form.purchase_cost}
-                onChange={(e) =>
-                  setForm({ ...form, purchase_cost: e.target.value })
-                }
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-              />
-            </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Purchase Date
-              </label>
-              <input
-                type="date"
-                value={form.purchase_date}
-                onChange={(e) =>
-                  setForm({ ...form, purchase_date: e.target.value })
-                }
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Status</label>
-              <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-              >
-                <option value="new">New</option>
-                <option value="in_use">In Use</option>
-                <option value="under_repair">Under Repair</option>
-                <option value="retired">Retired</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="text-sm font-medium text-gray-700">
                 Location
+                <input
+                  required={equipmentForm}
+                  type="text"
+                  list="asset-locations"
+                  value={form.location}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      location: event.target.value,
+                    }))
+                  }
+                  placeholder="Select or enter a location"
+                  className={inputClass}
+                />
+                <datalist id="asset-locations">
+                  {locations.map((location) => (
+                    <option key={location} value={location} />
+                  ))}
+                </datalist>
               </label>
-              <select
-                value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition-all duration-200 focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-              >
-                <option value="">— Select location —</option>
-                <option value="Bahir Dar Office">Bahir Dar Office</option>
-                <option value="Addis Ababa Office">Addis Ababa Office</option>
-              </select>
-            </div>
 
-            <button
-              type="submit"
-              disabled={creating}
-              className="rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-6 py-3 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed sm:col-span-2"
-            >
-              {creating
-                ? "Saving..."
-                : editingId
-                  ? "Update Asset"
-                  : "Add Asset"}
-            </button>
+              <label className="text-sm font-medium text-gray-700">
+                Asset condition
+                <select
+                  value={form.status}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      status: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  {Object.entries(conditionLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {equipmentForm ? (
+                <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900 sm:col-span-2">
+                  One record represents one physical device. Finance assigns
+                  devices through approved worker requests.
+                  {editingAsset?.assigned_to && !editingAsset.borrowed_by && (
+                    <p className="mt-2 font-medium">
+                      This record has an existing assignment. Editing will
+                      preserve it; the device is not available for borrowing.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {form.category === "furniture" && (
+                    <label className="text-sm font-medium text-gray-700">
+                      Quantity
+                      <input
+                        required
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={form.quantity}
+                        onChange={(event) =>
+                          setForm((previous) => ({
+                            ...previous,
+                            quantity: event.target.value,
+                          }))
+                        }
+                        className={inputClass}
+                      />
+                    </label>
+                  )}
+
+                  <label className="text-sm font-medium text-gray-700">
+                    Assigned to
+                    <select
+                      value={form.assigned_to}
+                      disabled={Boolean(userLoadError)}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          assigned_to: event.target.value,
+                        }))
+                      }
+                      className={inputClass}
+                    >
+                      <option value="">Unassigned</option>
+
+                      {form.assigned_to &&
+                        !users.some((user) => user.id === form.assigned_to) && (
+                          <option value={form.assigned_to}>
+                            {editingAsset?.assignee_name ||
+                              "Existing assignee"}
+                          </option>
+                        )}
+
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </select>
+                    {userLoadError && (
+                      <span className="mt-1 block text-xs text-amber-700">
+                        {userLoadError}
+                      </span>
+                    )}
+                  </label>
+
+                  <label className="text-sm font-medium text-gray-700">
+                    Purchase cost (ETB)
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={form.purchase_cost}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          purchase_cost: event.target.value,
+                        }))
+                      }
+                      className={inputClass}
+                    />
+                  </label>
+
+                  <label className="text-sm font-medium text-gray-700">
+                    Purchase date
+                    <input
+                      type="date"
+                      value={form.purchase_date}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          purchase_date: event.target.value,
+                        }))
+                      }
+                      className={inputClass}
+                    />
+                  </label>
+                </>
+              )}
+
+              <div className="flex gap-3 sm:col-span-2">
+                <button type="submit" className={buttonClass}>
+                  {saving
+                    ? "Saving..."
+                    : editingId
+                      ? "Save changes"
+                      : "Register asset"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </fieldset>
           </form>
         )}
 
-        <div className="mb-6 flex flex-wrap gap-3 fade-in">
-          <button
-            onClick={() =>
-              (window.location.href = "/api/reports/assets?format=xlsx")
-            }
-            className="rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
-          >
-            Download Excel
-          </button>
-          <button
-            onClick={() =>
-              (window.location.href = "/api/reports/assets?format=docx")
-            }
-            className="rounded-full bg-gray-100 px-5 py-2.5 text-sm font-medium text-gray-700 shadow-md transition-all duration-200 hover:bg-gray-200 hover:shadow-lg hover:scale-105"
-          >
-            Download Word
-          </button>
-        </div>
+        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-brand-deep">
+              Registered assets
+            </h2>
 
-        <div className="mb-4 flex flex-wrap gap-2">
-          {[
-            { id: "all", label: "All" },
-            { id: "borrowed", label: "Borrowed" },
-            { id: "return_pending", label: "Return Pending" },
-            ...(role === "admin" ? [{ id: "history", label: "History" }] : []),
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setRegistryTab(tab.id)}
-              className={`rounded px-4 py-2 text-sm font-medium ${
-                registryTab === tab.id ? "bg-brand-deep text-white" : "bg-gray-100 text-gray-700"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {registryTab !== "history" && (
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            <input
-              type="search"
-              value={assetSearch}
-              onChange={(e) => setAssetSearch(e.target.value)}
-              placeholder="Search item, tag, or serial number"
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-            />
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-            >
-              <option value="all">All categories</option>
-              <option value="electronics">Electronics</option>
-              <option value="furniture">Furniture</option>
-              <option value="vehicle">Vehicle</option>
-              <option value="office_supplies">Office supplies</option>
-              <option value="other">Other</option>
-            </select>
-            <select
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-            >
-              <option value="all">All locations</option>
-              <option value="Bahir Dar Office">Bahir Dar Office</option>
-              <option value="Addis Ababa Office">Addis Ababa Office</option>
-            </select>
-          </div>
-        )}
-
-        {registryTab !== "history" && <div className="mb-6 flex flex-wrap gap-2 fade-in">
-          {["all", "new", "in_use", "under_repair", "retired"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                filter === f
-                  ? "bg-brand-deep text-white shadow-lg scale-105"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md hover:scale-105"
-              }`}
-            >
-              {f === "all" ? "All" : (f || "").replace("_", " ")}
-            </button>
-          ))}
-        </div>}
-
-        <div className="rounded-2xl border-t-4 border-brand bg-white/95 backdrop-blur-sm p-6 shadow-xl fade-in">
-          {registryTab === "history" ? (
-            loanHistory.length === 0 ? (
-              <p className="text-gray-500">No completed loan history found.</p>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 text-gray-600">
-                      <th className="px-3 py-2">Asset</th>
-                      <th className="px-3 py-2">Borrower</th>
-                      <th className="px-3 py-2">Purpose</th>
-                      <th className="px-3 py-2">Due</th>
-                      <th className="px-3 py-2">Returned</th>
-                      <th className="px-3 py-2">Condition</th>
-                      <th className="px-3 py-2">Note</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loanHistory.map((entry) => (
-                      <tr key={entry.item.id} className="border-t border-gray-100">
-                        <td className="px-3 py-2">{entry.item.asset?.item_name || "Asset"} · {entry.item.asset?.asset_tag}</td>
-                        <td className="px-3 py-2">{entry.requester?.name || "Unknown"}</td>
-                        <td className="px-3 py-2">{entry.purpose}</td>
-                        <td className="px-3 py-2">{entry.item.due_date || "—"}</td>
-                        <td className="px-3 py-2">{entry.item.returned_at ? new Date(entry.item.returned_at).toLocaleDateString() : "—"}</td>
-                        <td className="px-3 py-2 capitalize">{entry.item.return_condition || "—"}</td>
-                        <td className="px-3 py-2">{entry.item.return_note || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
-          ) : loading ? (
-            <div className="space-y-4">
-              <div className="h-8 shimmer rounded-lg" />
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="h-12 w-24 shimmer rounded-lg" />
-                    <div className="h-12 flex-1 shimmer rounded-lg" />
-                    <div className="h-12 w-16 shimmer rounded-lg" />
-                    <div className="h-12 w-16 shimmer rounded-lg" />
-                    <div className="h-12 w-16 shimmer rounded-lg" />
-                    <div className="h-12 w-32 shimmer rounded-lg" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : filteredAssets.length === 0 ? (
-            <p className="text-gray-500">No assets found.</p>
-          ) : (
-            <div className="space-y-8">
-              {(() => {
-                // Group assets by category
-                const grouped = filteredAssets.reduce((acc, a) => {
-                  const cat = a.category || "other";
-                  if (!acc[cat]) acc[cat] = [];
-                  acc[cat].push(a);
-                  return acc;
-                }, {} as Record<string, typeof filteredAssets>);
-
-                const categoryLabels: Record<string, string> = {
-                  electronics: "Electronics",
-                  furniture: "Furniture",
-                  vehicle: "Vehicles",
-                  office_supplies: "Office Supplies",
-                  other: "Other",
-                };
-
-                const categoryIcons: Record<string, string> = {
-                  electronics: "💻",
-                  furniture: "🪑",
-                  vehicle: "🚗",
-                  office_supplies: "📦",
-                  other: "📦",
-                };
-
-                return Object.entries(grouped).map(([category, assets]) => (
-                  <div key={category} className="fade-in">
-                    <div 
-                      className="mb-4 flex items-center justify-between gap-3 border-b-2 border-brand/20 pb-3 cursor-pointer hover:bg-gray-50 transition-colors rounded-lg px-2 -mx-2"
-                      onClick={() => setCollapsedCategories({
-                        ...collapsedCategories,
-                        [category]: !collapsedCategories[category]
-                      })}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-3xl">{categoryIcons[category] || "📦"}</span>
-                        <div>
-                          <h3 className="text-xl font-bold text-brand-deep">
-                            {categoryLabels[category] || category}
-                          </h3>
-                          <p className="text-sm text-gray-500">{assets.length} item{assets.length !== 1 ? 's' : ''}</p>
-                        </div>
-                      </div>
-                      <button className="text-2xl text-gray-400 hover:text-brand-deep transition-colors">
-                        {collapsedCategories[category] ? '▶' : '▼'}
-                      </button>
-                    </div>
-                    {!collapsedCategories[category] && (
-                      <div className="overflow-x-auto rounded-xl border border-gray-200">
-                        <table className="w-full text-left text-sm">
-                        <thead>
-                          <tr className="bg-gray-50 text-gray-600">
-                            <th className="px-4 py-3 font-semibold">Tag</th>
-                            <th className="px-4 py-3 font-semibold">Item</th>
-                            <th className="px-4 py-3 font-semibold">Serial No</th>
-                            <th className="px-4 py-3 font-semibold">Holder</th>
-                            <th className="px-4 py-3 font-semibold">Holding Status</th>
-                            <th className="px-4 py-3 font-semibold">Cost</th>
-                            <th className="px-4 py-3 font-semibold">Location</th>
-                            <th className="px-4 py-3 font-semibold">Condition</th>
-                            {canEdit && <th className="px-4 py-3 font-semibold"></th>}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {assets.map((a) => (
-                            <tr
-                              key={a.id}
-                              onClick={() => setSelectedAssetId(a.id)}
-                              className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-brand/5 transition-colors"
-                            >
-                              <td className="px-4 py-3 font-mono text-xs font-medium text-brand-deep">{a.asset_tag}</td>
-                              <td className="px-4 py-3">
-                                <span className="font-medium text-gray-900">{a.item_name}</span>
-                                {a.electronics_subcategory && (
-                                  <span className="ml-2 text-xs text-brand-deep bg-brand/10 px-2 py-0.5 rounded-full">
-                                    {(a.electronics_subcategory || "").replace("_", " ")}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="font-mono text-xs text-gray-600">{a.serial_number || "—"}</span>
-                              </td>
-                              <td className="px-4 py-3">{a.borrower_name || a.assignee_name || "—"}</td>
-                              <td className="px-4 py-3">
-                                <span className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium capitalize text-gray-700">
-                                  {a.borrowed_by
-                                    ? a.return_requested
-                                      ? "Return pending"
-                                      : "Borrowed"
-                                    : a.status === "under_repair"
-                                      ? "Under repair"
-                                      : a.status === "retired"
-                                        ? "Retired"
-                                        : a.assigned_to
-                                          ? "Assigned"
-                                        : "Available"}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                {a.purchase_cost ? (
-                                  <span className="font-medium">{a.purchase_cost} ETB</span>
-                                ) : (
-                                  <span className="text-gray-400">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3">{a.location || "—"}</td>
-                              <td className="px-4 py-3">
-                                {canEdit ? (
-                                  <select
-                                    value={a.status}
-                                    onChange={(e) =>
-                                      handleStatusChange(a.id, e.target.value)
-                                    }
-                                    className={`rounded-full border-0 px-3 py-1.5 text-xs font-medium shadow-sm transition-all duration-200 hover:shadow-md ${
-                                      statusColors[a.status]
-                                    }`}
-                                  >
-                                    <option value="new">New</option>
-                                    <option value="in_use">In Use</option>
-                                    <option value="under_repair">Under Repair</option>
-                                    <option value="retired">Retired</option>
-                                  </select>
-                                ) : (
-                                  <span
-                                    className={`inline-flex rounded-full px-3 py-1.5 text-xs font-medium shadow-sm ${
-                                      statusColors[a.status]
-                                    }`}
-                                  >
-                                    {(a.status || "").replace("_", " ")}
-                                  </span>
-                                )}
-                              </td>
-                              {canEdit && (
-                                <td className="px-4 py-3">
-                                  <div className="flex flex-wrap gap-2">
-                                    <button
-                                      onClick={() => handleEditClick(a)}
-                                      className="rounded-full px-3 py-1.5 text-xs font-medium text-brand-deep hover:bg-brand/10 transition-all duration-200 hover:scale-105"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleDelete(a.id)}
-                                      className="rounded-full px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-all duration-200 hover:scale-105"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                </td>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    )}
-                  </div>
-                ));
-              })()}
-            </div>
-          )}
-        </div>
-
-        {selectedAsset && (
-          <section className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-brand-deep">
-                  {selectedAsset.item_name || "Asset details"} · {selectedAsset.asset_tag}
-                </h2>
-                <p className="text-sm text-gray-500">
-                  Serial {selectedAsset.serial_number || "—"} · Holder {selectedAsset.borrower_name || selectedAsset.assignee_name || "—"} · Condition {(selectedAsset.status || "").replaceAll("_", " ")}
-                </p>
-              </div>
+            <div className="flex flex-wrap gap-3 text-sm">
               <button
                 type="button"
-                onClick={() => setSelectedAssetId(null)}
-                className="rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-700"
+                onClick={refreshAssets}
+                disabled={loading || saving || Boolean(busyId)}
+                className="font-medium text-brand-deep underline disabled:opacity-50"
               >
-                Close
+                Refresh
               </button>
+
+              {canManage && (
+                <>
+                  <a
+                    href="/api/reports/assets?format=xlsx"
+                    className="font-medium text-brand-deep underline"
+                  >
+                    Download Excel
+                  </a>
+                  <a
+                    href="/api/reports/assets?format=docx"
+                    className="font-medium text-brand-deep underline"
+                  >
+                    Download Word
+                  </a>
+                </>
+              )}
             </div>
-            <h3 className="mb-2 text-sm font-semibold text-gray-800">Loan history</h3>
-            {selectedAssetLoans.length === 0 ? (
-              <p className="text-sm text-gray-500">No loans recorded for this asset.</p>
-            ) : (
-              <div className="space-y-2">
-                {selectedAssetLoans.map((entry) => (
-                  <div key={entry.item.id} className="flex flex-wrap justify-between gap-2 border-t border-gray-100 py-2 text-sm">
-                    <span>
-                      {entry.requester?.name || "Unknown borrower"} · {entry.purpose}
-                    </span>
-                    <span className="text-gray-500">
-                      Issued {entry.item.borrowed_at ? new Date(entry.item.borrowed_at).toLocaleDateString() : "—"}
-                      {entry.item.due_date ? ` · Due ${entry.item.due_date}` : ""}
-                      {entry.item.returned_at ? ` · Returned ${new Date(entry.item.returned_at).toLocaleDateString()}` : " · Not returned"}
-                      {entry.item.return_condition ? ` · ${entry.item.return_condition}` : ""}
-                    </span>
-                  </div>
+          </div>
+
+          <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <label className="text-xs font-medium text-gray-600">
+              Search
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={
+                  canManage ? "Item, code, or serial" : "Item or asset code"
+                }
+                className={inputClass}
+              />
+            </label>
+
+            <label className="text-xs font-medium text-gray-600">
+              Category
+              <select
+                value={categoryFilter}
+                onChange={(event) => {
+                  setCategoryFilter(event.target.value);
+                  setTypeFilter("all");
+                }}
+                className={inputClass}
+              >
+                <option value="all">All categories</option>
+                {Object.entries(categoryLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
-              </div>
-            )}
-          </section>
-        )}
-      </div>
+              </select>
+            </label>
+
+            <label className="text-xs font-medium text-gray-600">
+              Electronics type
+              <select
+                value={typeFilter}
+                onChange={(event) => {
+                  setTypeFilter(event.target.value);
+                  if (event.target.value !== "all") {
+                    setCategoryFilter("electronics");
+                  }
+                }}
+                className={inputClass}
+              >
+                <option value="all">All types</option>
+                <option value="tablet">Tablet</option>
+                <option value="pc">PC</option>
+                <option value="other">Other electronics</option>
+              </select>
+            </label>
+
+            <label className="text-xs font-medium text-gray-600">
+              Status
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className={inputClass}
+              >
+                <option value="all">All statuses</option>
+                {[
+                  "Available",
+                  "Borrowed",
+                  "Return requested",
+                  "Under Repair",
+                  "Retired",
+                  "Assigned",
+                  "Unavailable",
+                ].map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-xs font-medium text-gray-600">
+              Location
+              <select
+                value={locationFilter}
+                onChange={(event) => setLocationFilter(event.target.value)}
+                className={inputClass}
+              >
+                <option value="all">All locations</option>
+                {locations.map((location) => (
+                  <option key={location} value={location}>
+                    {location}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <th className="px-3 py-3">Asset code</th>
+                  <th className="px-3 py-3">Item name</th>
+                  <th className="px-3 py-3">Category / Type</th>
+                  {canManage && (
+                    <th className="px-3 py-3">Serial number</th>
+                  )}
+                  <th className="px-3 py-3">Location</th>
+                  <th className="px-3 py-3">Status</th>
+                  <th className="px-3 py-3">Condition</th>
+                  {canManage && (
+                    <th className="px-3 py-3">Actions</th>
+                  )}
+                </tr>
+              </thead>
+
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={canManage ? 8 : 6}
+                      className="p-8 text-center text-gray-500"
+                    >
+                      Loading assets...
+                    </td>
+                  </tr>
+                ) : filteredAssets.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={canManage ? 8 : 6}
+                      className="p-8 text-center text-gray-500"
+                    >
+                      No assets match these filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAssets.map((asset) => (
+                    <tr
+                      key={asset.id}
+                      className="border-t border-gray-100 align-top hover:bg-gray-50"
+                    >
+                      <td className="px-3 py-4 font-mono text-xs font-semibold text-brand-deep">
+                        {asset.asset_tag}
+                      </td>
+
+                      <td className="px-3 py-4 font-medium text-gray-900">
+                        {asset.item_name || "Unnamed asset"}
+                      </td>
+
+                      <td className="px-3 py-4 text-gray-600">
+                        {categoryLabels[asset.category] || asset.category}
+                        {asset.electronics_subcategory && (
+                          <div className="mt-1 text-xs uppercase">
+                            {asset.electronics_subcategory}
+                          </div>
+                        )}
+                      </td>
+
+                      {canManage && (
+                        <td className="px-3 py-4 font-mono text-xs">
+                          {asset.serial_number || "—"}
+                        </td>
+                      )}
+
+                      <td className="px-3 py-4">
+                        {asset.location || "—"}
+                      </td>
+
+                      <td className="px-3 py-4">
+                        <span
+                          className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${statusColor(asset)}`}
+                        >
+                          {holdingStatus(asset)}
+                        </span>
+                      </td>
+
+                      <td className="px-3 py-4">
+                        {conditionLabels[asset.status] ||
+                          asset.status ||
+                          "Not recorded"}
+                      </td>
+
+                      {canManage && (
+                        <td className="px-3 py-4">
+                          {hasActiveLoan(asset) ? (
+                            <a
+                              href="/assets/borrowed"
+                              className="text-xs font-medium text-brand-deep underline"
+                            >
+                              View on Borrowed page
+                            </a>
+                          ) : (
+                            <div className="flex flex-wrap gap-3">
+                              <button
+                                type="button"
+                                disabled={saving || Boolean(busyId)}
+                                onClick={() => openEditForm(asset)}
+                                className="text-xs font-medium text-brand-deep underline disabled:opacity-50"
+                              >
+                                Edit
+                              </button>
+
+                              {!asset.assigned_to && (
+                                <button
+                                  type="button"
+                                  disabled={saving || Boolean(busyId)}
+                                  onClick={() => handleDelete(asset)}
+                                  className="text-xs font-medium text-red-700 underline disabled:opacity-50"
+                                >
+                                  {busyId === asset.id
+                                    ? "Deleting..."
+                                    : "Delete"}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!loading && (
+            <p className="mt-4 text-xs text-gray-500">
+              Showing {filteredAssets.length} of {assets.length} registered
+              assets.
+            </p>
+          )}
+        </section>
+      </main>
     </div>
   );
 }

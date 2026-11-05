@@ -1,77 +1,142 @@
 import { NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
 
-function getServiceClient() {
-  return createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 export async function GET() {
-  const supabase = await createServerClient();
+  try {
+    const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    if (authError || !user) {
+      return json({ error: "Unauthorized." }, 401);
+    }
 
-  const { data: profile } = await supabase
-    .from("public_users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+    const { data: profile, error: profileError } = await supabase
+      .from("public_users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
-  const role = profile?.role;
-  const serviceClient = getServiceClient();
+    if (profileError) {
+      return json({ error: "Unable to verify your role." }, 500);
+    }
 
-  if (role === "manager") {
-    const [approvalsRes, paymentsRes] = await Promise.all([
-      serviceClient
-        .from("requests")
+    const role = profile?.role;
+
+    if (
+      !role ||
+      !["worker", "manager", "finance", "admin", "accountant"].includes(
+        role,
+      )
+    ) {
+      return json({ error: "Forbidden." }, 403);
+    }
+
+    // Use the signed-in client so badge counts follow the same
+    // access policies as the corresponding lists.
+    if (role === "manager") {
+      const [approvalsResult, paymentsResult] = await Promise.all([
+        supabase
+          .from("requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending_manager"),
+
+        supabase
+          .from("payment_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending_manager"),
+      ]);
+
+      if (approvalsResult.error || paymentsResult.error) {
+        console.error(
+          "Manager badge query failed:",
+          approvalsResult.error || paymentsResult.error,
+        );
+
+        return json(
+          { error: "Unable to load navigation counts." },
+          500,
+        );
+      }
+
+      return json({
+        approvals: approvalsResult.count ?? 0,
+        payments: paymentsResult.count ?? 0,
+      });
+    }
+
+    if (role === "finance") {
+      const [financeResult, returnsResult] = await Promise.all([
+        supabase
+          .from("requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending_finance"),
+
+        supabase
+          .from("equipment_loans")
+          .select("id", { count: "exact", head: true })
+          .not("return_requested_at", "is", null)
+          .is("returned_at", null),
+      ]);
+
+      if (financeResult.error || returnsResult.error) {
+        console.error(
+          "Finance badge query failed:",
+          financeResult.error || returnsResult.error,
+        );
+
+        return json(
+          { error: "Unable to load navigation counts." },
+          500,
+        );
+      }
+
+      return json({
+        finance: financeResult.count ?? 0,
+        returns: returnsResult.count ?? 0,
+      });
+    }
+
+    if (role === "admin") {
+      const { count, error } = await supabase
+        .from("equipment_loans")
         .select("id", { count: "exact", head: true })
-        .eq("status", "pending_manager"),
-      serviceClient
-        .from("payment_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending_manager"),
-    ]);
+        .not("return_requested_at", "is", null)
+        .is("returned_at", null);
 
-    return NextResponse.json({
-      approvals: approvalsRes.count || 0,
-      payments: paymentsRes.count || 0,
-    });
+      if (error) {
+        console.error("Admin return badge query failed:", error);
+
+        return json(
+          { error: "Unable to load navigation counts." },
+          500,
+        );
+      }
+
+      return json({
+        returns: count ?? 0,
+      });
+    }
+
+    return json({});
+  } catch (error) {
+    console.error("Navigation badges endpoint failed:", error);
+
+    return json(
+      { error: "Unable to load navigation counts." },
+      500,
+    );
   }
-
-  if (role === "finance") {
-    const financeRes = await serviceClient
-      .from("requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending_finance");
-
-    return NextResponse.json({ finance: financeRes.count || 0 });
-  }
-
-  if (role === "admin") {
-    const [handoversRes, returnsRes] = await Promise.all([
-      serviceClient
-        .from("asset_loan_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "approved")
-        .not("finance_selected_at", "is", null),
-      serviceClient
-        .from("asset_loans")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "return_requested"),
-    ]);
-    return NextResponse.json({
-      assetLoans: (handoversRes.count || 0) + (returnsRes.count || 0),
-    });
-  }
-
-  return NextResponse.json({});
 }

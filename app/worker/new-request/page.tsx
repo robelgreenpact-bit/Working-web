@@ -1,38 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
-
-const perDiemTemplate = `**Per Diem Request**
-**Date:** ____________________
-**Title of Form:** Field Allowance Evidence Form for Deploying Employees
-
----
-
-Main Table (Employee Details)
-
-Field Label (Left Column) | Field/Status (Right Column)
-**Employee's Name** | ____________________
-**Investigation / Status** | ____________________
-**Salary** | ____________________
-**Field Deployment Location** | ____________________
-**Field Deployment Date** | ____________________
-**Date Returned from Deployment** | ____________________
-**Number of Days** | ____________________
-**Payable / Total Amount Due** | ____________________
-
----
-
-Approval and Signatures Table
-
-Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature
-
----
-
-Report Section
-**Brief Report of the activities completed**
-*(Blank section box for notes)*`;
 
 const typeConfig: Record<
   string,
@@ -75,488 +45,889 @@ const typeConfig: Record<
   },
 };
 
+const initialPerDiemFields = {
+  date: "",
+  employee_name: "",
+  salary: "",
+  field_deployment_location: "",
+  field_deployment_date: "",
+  date_returned: "",
+  number_of_days: "",
+  payable_amount: "",
+  requester_name: "",
+  reviewer_name: "",
+  approver_name: "",
+  report: "",
+};
+
+type PerDiemFields = typeof initialPerDiemFields;
+
+const perDiemRows: {
+  key: keyof PerDiemFields;
+  label: string;
+  type: string;
+}[] = [
+  { key: "employee_name", label: "Employee's Name", type: "text" },
+  { key: "salary", label: "Perdium amount", type: "text" },
+  {
+    key: "field_deployment_location",
+    label: "Field Deployment Location",
+    type: "text",
+  },
+  {
+    key: "field_deployment_date",
+    label: "Field Deployment Date",
+    type: "text",
+  },
+  {
+    key: "date_returned",
+    label: "Date Returned from Deployment",
+    type: "text",
+  },
+  {
+    key: "number_of_days",
+    label: "Number of Days",
+    type: "number",
+  },
+  {
+    key: "payable_amount",
+    label: "Growth amount",
+    type: "text",
+  },
+];
+
+const signatureFields: {
+  key: keyof PerDiemFields;
+  label: string;
+}[] = [
+  {
+    key: "requester_name",
+    label: "Requester's Name & Signature",
+  },
+  {
+    key: "reviewer_name",
+    label: "Reviewer's Name & Signature",
+  },
+  {
+    key: "approver_name",
+    label: "Approver's Name & Signature",
+  },
+];
+
+const inputClass =
+  "mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:border-brand-deep focus:outline-none focus:ring-2 focus:ring-brand-deep/20 disabled:bg-gray-100 disabled:text-gray-500";
+
+function buildPerDiemDescription(fields: PerDiemFields) {
+  const blank = "__________________";
+
+  return [
+    "**Perdium Request**",
+    `**Date:** ${fields.date || blank}`,
+    "**Title of Form:** Field Allowance Evidence Form for Deploying Employees",
+    "",
+    "---",
+    "",
+    "Main Table (Employee Details)",
+    "",
+    "Field Label (Left Column) | Field/Status (Right Column)",
+    `**Employee's Name** | ${fields.employee_name || blank}`,
+    `**Perdium amount** | ${fields.salary || blank}`,
+    `**Field Deployment Location** | ${fields.field_deployment_location || blank}`,
+    `**Field Deployment Date** | ${fields.field_deployment_date || blank}`,
+    `**Date Returned from Deployment** | ${fields.date_returned || blank}`,
+    `**Number of Days** | ${fields.number_of_days || blank}`,
+    `**Payable / Total Amount Due** | ${fields.payable_amount || blank}`,
+    "",
+    "---",
+    "",
+    "Approval and Signatures Table",
+    "",
+    "Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature",
+    `${fields.requester_name || blank} | ${fields.reviewer_name || blank} | ${fields.approver_name || blank}`,
+    "",
+    "---",
+    "",
+    "Report Section",
+    "**Brief Report of the activities completed**",
+    fields.report || "",
+  ].join("\n");
+}
+
+type ItemNamesState = {
+  key: string;
+  names: string[];
+  error: string;
+};
+
 export default function NewRequestPage() {
-  const [inventoryItemNames, setInventoryItemNames] = useState<string[]>([]);
-  const [customItemName, setCustomItemName] = useState("");
+  const router = useRouter();
+  const submitting = useRef(false);
+
   const [form, setForm] = useState({
     type: "physical_good",
     title: "",
     item_name: "",
     justification: "",
     description: "",
-    quantity: 1,
+    quantity: "1",
     estimated_cost: "",
     asset_category: "",
     electronics_subcategory: "",
   });
-  const [perDiemFields, setPerDiemFields] = useState({
-    date: "",
-    employee_name: "",
-    salary: "",
-    field_deployment_location: "",
-    field_deployment_date: "",
-    date_returned: "",
-    number_of_days: "",
-    payable_amount: "",
-    requester_name: "",
-    reviewer_name: "",
-    approver_name: "",
-    report: "",
+
+  const [customItemName, setCustomItemName] = useState("");
+  const [perDiemFields, setPerDiemFields] = useState<PerDiemFields>({
+    ...initialPerDiemFields,
   });
-  const [files, setFiles] = useState<FileList | null>(null);
+
+  const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+
+  const [namesRetry, setNamesRetry] = useState(0);
+  const [itemNamesState, setItemNamesState] = useState<ItemNamesState>({
+    key: "",
+    names: [],
+    error: "",
+  });
 
   const config = typeConfig[form.type];
 
-  useEffect(() => {
-    const category = form.type === "electronics"
+  const isEquipment =
+    form.type === "electronics" &&
+    ["tablet", "pc"].includes(form.electronics_subcategory);
+
+  const needsItemName = [
+    "electronics",
+    "physical_good",
+    "other_asset",
+  ].includes(form.type);
+
+  const itemCategory =
+    form.type === "electronics"
       ? "electronics"
       : ["physical_good", "other_asset"].includes(form.type)
         ? form.asset_category
         : "";
-    if (!category) return;
 
-    const params = new URLSearchParams({ category });
-    if (category === "electronics" && form.electronics_subcategory) {
+  // Wait until a Tablet/PC/Other selection is made before
+  // loading names for an electronics request.
+  const canLoadNames =
+    Boolean(itemCategory) &&
+    (form.type !== "electronics" ||
+      Boolean(form.electronics_subcategory));
+
+  const params = new URLSearchParams();
+
+  if (canLoadNames) {
+    params.set("category", itemCategory);
+
+    if (
+      itemCategory === "electronics" &&
+      form.electronics_subcategory
+    ) {
       params.set("subcategory", form.electronics_subcategory);
     }
-    fetch(`/api/assets/item-names?${params.toString()}`)
-      .then((res) => res.json())
-      .then((data) => setInventoryItemNames(data.item_names || []))
-      .catch(() => setInventoryItemNames([]));
-  }, [form.type, form.asset_category, form.electronics_subcategory]);
+  }
 
-  const buildPerDiemDescription = () => {
-    const lines = [
-      "**Perdium Request**",
-      `**Date:** ${perDiemFields.date || "__________________"}`,
-      "**Title of Form:** Field Allowance Evidence Form for Deploying Employees",
-      "",
-      "---",
-      "",
-      "Main Table (Employee Details)",
-      "",
-      "Field Label (Left Column) | Field/Status (Right Column)",
-      `**Employee's Name** | ${perDiemFields.employee_name || "__________________"}`,
-      `**Perdium amount** | ${perDiemFields.salary || "__________________"}`,
-      `**Field Deployment Location** | ${perDiemFields.field_deployment_location || "__________________"}`,
-      `**Field Deployment Date** | ${perDiemFields.field_deployment_date || "__________________"}`,
-      `**Date Returned from Deployment** | ${perDiemFields.date_returned || "__________________"}`,
-      `**Number of Days** | ${perDiemFields.number_of_days || "__________________"}`,
-      `**Payable / Total Amount Due** | ${perDiemFields.payable_amount || "__________________"}`,
-      "",
-      "---",
-      "",
-      "Approval and Signatures Table",
-      "",
-      `Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature`,
-      `${perDiemFields.requester_name || "__________________"} | ${perDiemFields.reviewer_name || "__________________"} | ${perDiemFields.approver_name || "__________________"}`,
-      "",
-      "---",
-      "",
-      "Report Section",
-      "**Brief Report of the activities completed**",
-      perDiemFields.report || "",
-    ];
+  const namesUrl = canLoadNames
+    ? `/api/assets/item-names?${params.toString()}`
+    : "";
 
-    return lines.join("\n");
-  };
+  // Associate results with the exact current selection.
+  // Results for a previous type cannot populate this dropdown.
+  const namesKey = namesUrl ? `${namesUrl}|${namesRetry}` : "";
+  const namesReady = Boolean(namesKey) && itemNamesState.key === namesKey;
+  const namesLoading = Boolean(namesKey) && !namesReady;
+  const namesError = namesReady ? itemNamesState.error : "";
+  const inventoryItemNames = namesReady ? itemNamesState.names : [];
 
-  const handleTypeChange = (value: string) => {
-    setInventoryItemNames([]);
+  useEffect(() => {
+    if (!namesUrl) return;
+
+    const controller = new AbortController();
+
+    async function loadNames() {
+      try {
+        const response = await fetch(namesUrl, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to load item names.");
+        }
+
+        if (
+          !Array.isArray(data.item_names) ||
+          !data.item_names.every(
+            (name: unknown) => typeof name === "string",
+          )
+        ) {
+          throw new Error("The item-name response is incomplete.");
+        }
+
+        if (!controller.signal.aborted) {
+          setItemNamesState({
+            key: namesKey,
+            names: data.item_names,
+            error: "",
+          });
+        }
+      } catch (loadError) {
+        if (!controller.signal.aborted) {
+          setItemNamesState({
+            key: namesKey,
+            names: [],
+            error:
+              loadError instanceof Error
+                ? loadError.message
+                : "Unable to load item names.",
+          });
+        }
+      }
+    }
+
+    void loadNames();
+
+    return () => controller.abort();
+  }, [namesUrl, namesKey]);
+
+  function handleTypeChange(value: string) {
+    setError("");
     setCustomItemName("");
-    setForm((prev) => ({
-      ...prev,
+
+    setForm((previous) => ({
+      ...previous,
       type: value,
       item_name: "",
-      description:
-        value === "per_diem" ? perDiemTemplate : "",
+      description: "",
       asset_category:
-        value === "electronics" ? "electronics" : prev.asset_category,
+        value === "electronics" ? "electronics" : "",
       electronics_subcategory: "",
     }));
-  };
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (submitting.current) return;
+
     setError("");
-    setLoading(true);
 
-    const requestedItemName = (form.item_name === "__custom__" ? customItemName : form.item_name).trim();
+    const requestedItemName = (
+      form.item_name === "__custom__"
+        ? customItemName
+        : form.item_name
+    ).trim();
+
+    if (
+      form.type === "electronics" &&
+      !["tablet", "pc", "other"].includes(
+        form.electronics_subcategory,
+      )
+    ) {
+      setError("Select the electronics type.");
+      return;
+    }
+
+    if (
+      ["physical_good", "other_asset"].includes(form.type) &&
+      !form.asset_category
+    ) {
+      setError("Select an asset category.");
+      return;
+    }
+
+    if (needsItemName && !requestedItemName) {
+      setError("Select or enter an item name.");
+      return;
+    }
+
+    if (isEquipment) {
+      if (
+        namesLoading ||
+        namesError ||
+        !namesReady ||
+        !inventoryItemNames.includes(requestedItemName)
+      ) {
+        setError(
+          "Select a registered item from the current Tablet/PC list.",
+        );
+        return;
+      }
+    }
+
+    if (needsItemName && !form.justification.trim()) {
+      setError("Enter a justification for your request.");
+      return;
+    }
+
+    if (
+      config.needsQuantity &&
+      (!Number.isSafeInteger(Number(form.quantity)) ||
+        Number(form.quantity) < 1)
+    ) {
+      setError("Quantity must be a positive whole number.");
+      return;
+    }
+
+    if (
+      config.needsCost &&
+      (form.estimated_cost.trim() === "" ||
+        !Number.isFinite(Number(form.estimated_cost)) ||
+        Number(form.estimated_cost) < 0)
+    ) {
+      setError("Enter a valid estimated cost of zero or greater.");
+      return;
+    }
+
     const submissionTitle =
-      form.type === "electronics" && requestedItemName
+      form.type === "electronics"
         ? `${requestedItemName} request`
-        : (form.type === "per_diem" || form.type === "other_asset") && !form.title.trim()
-        ? "Perdium Request"
-        : form.title;
-    const submissionDescription =
-      form.type === "per_diem" ? buildPerDiemDescription() : form.description;
+        : form.title.trim();
+
+    if (!submissionTitle) {
+      setError("Enter a request title.");
+      return;
+    }
 
     const formData = new FormData();
+
     formData.append("type", form.type);
     formData.append("title", submissionTitle);
-    formData.append("description", submissionDescription);
-    formData.append("asset_category", form.asset_category);
+    formData.append(
+      "description",
+      form.type === "per_diem"
+        ? buildPerDiemDescription(perDiemFields)
+        : isEquipment
+          ? ""
+          : form.description.trim(),
+    );
+
+    formData.append(
+      "asset_category",
+      form.type === "electronics"
+        ? "electronics"
+        : form.asset_category,
+    );
+
+    // Keep the existing field for other request types.
     formData.append("item_name", requestedItemName || submissionTitle);
-    formData.append("justification", form.justification);
-    formData.append("electronics_subcategory", form.electronics_subcategory);
+
+    // This is the field required by the simplified database function.
+    if (isEquipment) {
+      formData.append("requested_item_name", requestedItemName);
+    }
+
+    formData.append("justification", form.justification.trim());
+    formData.append(
+      "electronics_subcategory",
+      form.type === "electronics"
+        ? form.electronics_subcategory
+        : "",
+    );
 
     if (config.needsQuantity) {
-      formData.append("quantity", String(form.quantity));
+      formData.append("quantity", String(Number(form.quantity)));
     }
+
     if (config.needsCost) {
       formData.append("estimated_cost", form.estimated_cost);
     }
 
-    if (files) {
-      for (let i = 0; i < files.length; i++) {
-        formData.append("files", files[i]);
+    for (const file of files) {
+      formData.append("files", file);
+    }
+
+    submitting.current = true;
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/requests", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setError(data?.error || "Failed to submit the request.");
+        submitting.current = false;
+        setLoading(false);
+        return;
       }
+
+      router.push("/worker");
+      router.refresh();
+    } catch {
+      setError(
+        "The submission could not be confirmed. Check My Requests before trying again to avoid submitting it twice.",
+      );
+      submitting.current = false;
+      setLoading(false);
     }
+  }
 
-    const res = await fetch("/api/requests", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setError(data.error || "Failed to submit request");
-      return;
-    }
-
-    router.push("/worker");
-  };
+  const equipmentNotReady =
+    isEquipment &&
+    (namesLoading ||
+      Boolean(namesError) ||
+      !namesReady ||
+      inventoryItemNames.length === 0);
 
   return (
     <div>
       <Navbar title="New Request" />
-      <div className="mx-auto max-w-2xl p-8">
-        <h1 className="mb-6 text-2xl font-bold text-brand-deep">
-          Submit New Request
-        </h1>
+
+      <main className="mx-auto max-w-2xl p-4 sm:p-8">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold text-brand-deep">
+            Submit New Request
+          </h1>
+          <a
+            href="/worker"
+            className="text-sm font-medium text-brand-deep underline"
+          >
+            My Requests
+          </a>
+        </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-lg border-t-4 border-brand bg-white p-6 shadow"
+          className="rounded-xl border-t-4 border-brand bg-white p-5 shadow sm:p-6"
         >
           {error && (
-            <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-600">
+            <p
+              role="alert"
+              className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700"
+            >
               {error}
             </p>
           )}
 
-          <div className="mb-4">
-            <label className="mb-1 block text-sm text-gray-600">
+          <fieldset disabled={loading} className="space-y-5">
+            <label className="block text-sm font-medium text-gray-700">
               What do you want to request?
+              <select
+                value={form.type}
+                onChange={(event) =>
+                  handleTypeChange(event.target.value)
+                }
+                className={inputClass}
+              >
+                {Object.entries(typeConfig).map(([key, value]) => (
+                  <option key={key} value={key}>
+                    {value.label}
+                  </option>
+                ))}
+              </select>
             </label>
-            <select
-              value={form.type}
-              onChange={(e) => handleTypeChange(e.target.value)}
-              className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-            >
-              {Object.entries(typeConfig).map(([key, cfg]) => (
-                <option key={key} value={key}>
-                  {cfg.label}
-                </option>
-              ))}
-            </select>
-          </div>
 
-          {(form.type === "physical_good" || form.type === "other_asset") && (
-            <div className="mb-4">
-              <label className="mb-1 block text-sm text-gray-600">Asset category</label>
-              <select
-                required
-                value={form.asset_category}
-                onChange={(e) => {
-                  setInventoryItemNames([]);
-                  setCustomItemName("");
-                  setForm({ ...form, asset_category: e.target.value, item_name: "" });
-                }}
-                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-              >
-                <option value="">Select category</option>
-                <option value="electronics">Electronics</option>
-                <option value="furniture">Furniture</option>
-                <option value="vehicle">Vehicle</option>
-                <option value="office_supplies">Office supplies</option>
-              </select>
-            </div>
-          )}
-
-          {form.type === "electronics" && (
-            <div className="mb-4">
-              <label className="mb-1 block text-sm text-gray-600">
-                Electronics Type
-              </label>
-              <select
-                required
-                value={form.electronics_subcategory}
-                onChange={(e) => {
-                  setInventoryItemNames([]);
-                  setCustomItemName("");
-                  setForm({ ...form, item_name: "", electronics_subcategory: e.target.value });
-                }}
-                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-              >
-                <option value="">— Select type —</option>
-                <option value="tablet">Tablet</option>
-                <option value="pc">PC</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-          )}
-
-          {(form.type === "electronics" || form.type === "physical_good" || form.type === "other_asset") && (
-            <div className="mb-4">
-              <label className="mb-1 block text-sm text-gray-600">
-                Item name
-              </label>
-              {inventoryItemNames.length > 0 ? (
+            {["physical_good", "other_asset"].includes(form.type) && (
+              <label className="block text-sm font-medium text-gray-700">
+                Asset category
                 <select
                   required
-                  value={form.item_name}
-                  onChange={(e) => {
-                    setForm({ ...form, item_name: e.target.value });
+                  value={form.asset_category}
+                  onChange={(event) => {
                     setCustomItemName("");
+                    setForm((previous) => ({
+                      ...previous,
+                      asset_category: event.target.value,
+                      item_name: "",
+                      electronics_subcategory: "",
+                    }));
                   }}
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                  className={inputClass}
                 >
-                  <option value="">Select an item name</option>
-                  {inventoryItemNames.map((name) => <option key={name} value={name}>{name}</option>)}
-                  <option value="__custom__">Other / not listed</option>
+                  <option value="">Select category</option>
+                  <option value="electronics">Electronics</option>
+                  <option value="furniture">Furniture</option>
+                  <option value="vehicle">Vehicle</option>
+                  <option value="office_supplies">Office supplies</option>
                 </select>
-              ) : (
-                <input
-                  type="text"
-                  value={form.item_name === "__custom__" ? customItemName : form.item_name}
-                  onChange={(e) => {
-                    setForm({ ...form, item_name: "__custom__" });
-                    setCustomItemName(e.target.value);
-                  }}
-                  required
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                  placeholder="For example, Samsung Galaxy tablet"
-                />
-              )}
-              {form.item_name === "__custom__" && inventoryItemNames.length > 0 && (
-                <input
-                  type="text"
-                  value={customItemName}
-                  onChange={(e) => setCustomItemName(e.target.value)}
-                  required
-                  placeholder="Enter item name"
-                  className="mt-2 w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                />
-              )}
-            </div>
-          )}
-
-          {form.type !== "electronics" && <div className="mb-4">
-            <label className="mb-1 block text-sm text-gray-600">
-              Request title
-            </label>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              required
-              className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-              placeholder="Enter request title"
-            />
-          </div>}
-
-          {form.type === "per_diem" ? (
-            <div className="mb-6 rounded border border-amber-200 bg-amber-50 p-4">
-              <h2 className="mb-3 text-lg font-semibold text-brand-deep">
-                Perdium Request
-              </h2>
-              <div className="mb-4">
-                <label className="mb-1 block text-sm text-gray-600">Date</label>
-                <input
-                  type="date"
-                  value={perDiemFields.date}
-                  onChange={(e) =>
-                    setPerDiemFields({ ...perDiemFields, date: e.target.value })
-                  }
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                />
-              </div>
-
-              <div className="overflow-hidden rounded border border-gray-200 bg-white">
-                <div className="grid grid-cols-[1.2fr_1fr] border-b bg-gray-50 text-sm font-medium text-gray-700">
-                  <div className="border-r px-3 py-2">Field Label (Left Column)</div>
-                  <div className="px-3 py-2">Field/Status (Right Column)</div>
-                </div>
-
-                {[
-                  { key: "employee_name", label: "Employee's Name" },
-                  { key: "salary", label: "Perdium amount" },
-                  { key: "field_deployment_location", label: "Field Deployment Location" },
-                  { key: "field_deployment_date", label: "Field Deployment Date" },
-                  { key: "date_returned", label: "Date Returned from Deployment" },
-                  { key: "number_of_days", label: "Number of Days" },
-                  { key: "payable_amount", label: "Growth amount" },
-                ].map((row) => (
-                  <div key={row.key} className="grid grid-cols-[1.2fr_1fr] border-b last:border-b-0">
-                    <div className="border-r px-3 py-2 text-sm text-gray-700">
-                      {row.label}
-                    </div>
-                    <div className="px-3 py-2">
-                      <input
-                        type={row.key === "number_of_days" ? "number" : "text"}
-                        value={perDiemFields[row.key as keyof typeof perDiemFields]}
-                        onChange={(e) =>
-                          setPerDiemFields({
-                            ...perDiemFields,
-                            [row.key]: e.target.value,
-                          })
-                        }
-                        className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {[
-                  { key: "requester_name", label: "Requester's Name & Signature" },
-                  { key: "reviewer_name", label: "Reviewer's Name & Signature" },
-                  { key: "approver_name", label: "Approver's Name & Signature" },
-                ].map((field) => (
-                  <div key={field.key}>
-                    <label className="mb-1 block text-sm text-gray-600">
-                      {field.label}
-                    </label>
-                    <input
-                      type="text"
-                      value={perDiemFields[field.key as keyof typeof perDiemFields]}
-                      onChange={(e) =>
-                        setPerDiemFields({
-                          ...perDiemFields,
-                          [field.key]: e.target.value,
-                        })
-                      }
-                      className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4">
-                <label className="mb-1 block text-sm text-gray-600">
-                  Brief Report of the activities completed
-                </label>
-                <textarea
-                  value={perDiemFields.report}
-                  onChange={(e) =>
-                    setPerDiemFields({ ...perDiemFields, report: e.target.value })
-                  }
-                  rows={4}
-                  className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="mb-4">
-              <label className="mb-1 block text-sm text-gray-600">
-                Description
               </label>
-              <textarea
-                value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
-                rows={3}
-                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-              />
-            </div>
-          )}
+            )}
 
-          {(form.type === "electronics" || form.type === "physical_good" || form.type === "other_asset") && (
-            <div className="mb-4">
-              <label className="mb-1 block text-sm text-gray-600">Justification</label>
-              <textarea
-                required
-                value={form.justification}
-                onChange={(e) => setForm({ ...form, justification: e.target.value })}
-                rows={3}
-                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-              />
-            </div>
-          )}
+            {form.type === "electronics" && (
+              <label className="block text-sm font-medium text-gray-700">
+                Electronics type
+                <select
+                  required
+                  value={form.electronics_subcategory}
+                  onChange={(event) => {
+                    setCustomItemName("");
+                    setError("");
+                    setForm((previous) => ({
+                      ...previous,
+                      electronics_subcategory: event.target.value,
+                      item_name: "",
+                    }));
+                  }}
+                  className={inputClass}
+                >
+                  <option value="">Select type</option>
+                  <option value="tablet">Tablet</option>
+                  <option value="pc">PC</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            )}
 
-          {(config.needsQuantity || config.needsCost) && (
-            <div className="mb-4 grid grid-cols-2 gap-4">
-              {config.needsQuantity && (
-                <div>
-                  <label className="mb-1 block text-sm text-gray-600">
-                    Quantity
-                  </label>
+            {needsItemName && (
+              <div>
+                <label
+                  htmlFor="request-item"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Item name
+                </label>
+
+                {isEquipment ? (
+                  <>
+                    <select
+                      id="request-item"
+                      required
+                      value={form.item_name}
+                      disabled={
+                        namesLoading ||
+                        Boolean(namesError) ||
+                        inventoryItemNames.length === 0
+                      }
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          item_name: event.target.value,
+                        }))
+                      }
+                      className={inputClass}
+                    >
+                      <option value="">
+                        {namesLoading
+                          ? "Loading registered items..."
+                          : "Select a registered item"}
+                      </option>
+                      {inventoryItemNames.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {namesReady &&
+                      !namesError &&
+                      inventoryItemNames.length === 0 && (
+                        <p className="mt-2 text-sm text-amber-800">
+                          No item names are registered for this type.
+                          Ask finance or admin to register the equipment.
+                        </p>
+                      )}
+
+                    <p className="mt-2 text-xs text-gray-500">
+                      Registered items remain listed even when all devices
+                      are borrowed. Finance will check availability.
+                    </p>
+                  </>
+                ) : !canLoadNames ? (
+                  <p className="mt-2 text-sm text-gray-500">
+                    Select the category or electronics type first.
+                  </p>
+                ) : namesLoading ? (
+                  <p className="mt-2 text-sm text-gray-500">
+                    Loading item names...
+                  </p>
+                ) : inventoryItemNames.length > 0 ? (
+                  <>
+                    <select
+                      id="request-item"
+                      required
+                      value={form.item_name}
+                      onChange={(event) => {
+                        setCustomItemName("");
+                        setForm((previous) => ({
+                          ...previous,
+                          item_name: event.target.value,
+                        }));
+                      }}
+                      className={inputClass}
+                    >
+                      <option value="">Select an item name</option>
+                      {inventoryItemNames.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                      <option value="__custom__">
+                        Other / not listed
+                      </option>
+                    </select>
+
+                    {form.item_name === "__custom__" && (
+                      <input
+                        aria-label="Custom item name"
+                        required
+                        type="text"
+                        value={customItemName}
+                        onChange={(event) =>
+                          setCustomItemName(event.target.value)
+                        }
+                        placeholder="Enter item name"
+                        className={inputClass}
+                      />
+                    )}
+                  </>
+                ) : (
                   <input
-                    type="number"
-                    min={1}
-                    value={form.quantity}
-                    onChange={(e) =>
-                      setForm({ ...form, quantity: Number(e.target.value) })
-                    }
-                    className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                  />
-                </div>
-              )}
-
-              {config.needsCost && (
-                <div className={config.needsQuantity ? "" : "col-span-2"}>
-                  <label className="mb-1 block text-sm text-gray-600">
-                    Estimated Cost (ETB)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
+                    id="request-item"
                     required
-                    value={form.estimated_cost}
-                    onChange={(e) =>
-                      setForm({ ...form, estimated_cost: e.target.value })
+                    type="text"
+                    value={
+                      form.item_name === "__custom__"
+                        ? customItemName
+                        : form.item_name
                     }
-                    className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+                    onChange={(event) => {
+                      setForm((previous) => ({
+                        ...previous,
+                        item_name: "__custom__",
+                      }));
+                      setCustomItemName(event.target.value);
+                    }}
+                    placeholder="Enter item name"
+                    className={inputClass}
                   />
-                </div>
-              )}
-            </div>
-          )}
+                )}
 
-          <div className="mb-6">
-            <label className="mb-1 block text-sm text-gray-600">
-              Attachments (receipt, quote, itinerary, etc.)
+                {namesError && (
+                  <p role="alert" className="mt-2 text-sm text-red-700">
+                    {namesError}{" "}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNamesRetry((previous) => previous + 1)
+                      }
+                      className="font-medium underline"
+                    >
+                      Retry
+                    </button>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {form.type !== "electronics" && (
+              <label className="block text-sm font-medium text-gray-700">
+                Request title
+                <input
+                  required
+                  type="text"
+                  value={form.title}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      title: event.target.value,
+                    }))
+                  }
+                  placeholder="Enter request title"
+                  className={inputClass}
+                />
+              </label>
+            )}
+
+            {form.type === "per_diem" ? (
+              <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <h2 className="mb-4 text-lg font-semibold text-brand-deep">
+                  Perdium Request
+                </h2>
+
+                <label className="mb-4 block text-sm text-gray-700">
+                  Date
+                  <input
+                    type="date"
+                    value={perDiemFields.date}
+                    onChange={(event) =>
+                      setPerDiemFields((previous) => ({
+                        ...previous,
+                        date: event.target.value,
+                      }))
+                    }
+                    className={inputClass}
+                  />
+                </label>
+
+                <div className="space-y-3">
+                  {perDiemRows.map((field) => (
+                    <label
+                      key={field.key}
+                      className="block text-sm text-gray-700"
+                    >
+                      {field.label}
+                      <input
+                        type={field.type}
+                        value={perDiemFields[field.key]}
+                        onChange={(event) =>
+                          setPerDiemFields((previous) => ({
+                            ...previous,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                        className={inputClass}
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {signatureFields.map((field) => (
+                    <label
+                      key={field.key}
+                      className="block text-sm text-gray-700"
+                    >
+                      {field.label}
+                      <input
+                        type="text"
+                        value={perDiemFields[field.key]}
+                        onChange={(event) =>
+                          setPerDiemFields((previous) => ({
+                            ...previous,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                        className={inputClass}
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <label className="mt-4 block text-sm text-gray-700">
+                  Brief Report of the activities completed
+                  <textarea
+                    rows={4}
+                    value={perDiemFields.report}
+                    onChange={(event) =>
+                      setPerDiemFields((previous) => ({
+                        ...previous,
+                        report: event.target.value,
+                      }))
+                    }
+                    className={inputClass}
+                  />
+                </label>
+              </section>
+            ) : !isEquipment ? (
+              <label className="block text-sm font-medium text-gray-700">
+                Description
+                <textarea
+                  rows={3}
+                  value={form.description}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      description: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                />
+              </label>
+            ) : null}
+
+            {config.needsQuantity && (
+              <label className="block text-sm font-medium text-gray-700">
+                Quantity
+                <input
+                  required
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.quantity}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      quantity: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                />
+              </label>
+            )}
+
+            {needsItemName && (
+              <label className="block text-sm font-medium text-gray-700">
+                Justification
+                <textarea
+                  required
+                  rows={3}
+                  value={form.justification}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      justification: event.target.value,
+                    }))
+                  }
+                  placeholder="Explain why you need these items."
+                  className={inputClass}
+                />
+              </label>
+            )}
+
+            {config.needsCost && (
+              <label className="block text-sm font-medium text-gray-700">
+                Estimated Cost (ETB)
+                <input
+                  required
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.estimated_cost}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      estimated_cost: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                />
+              </label>
+            )}
+
+            {isEquipment && (
+              <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
+                Your request goes to the manager first. Once approved,
+                finance selects the exact devices from inventory.
+                If there is not enough stock, the request stays pending
+                or is rejected with a reason.
+              </div>
+            )}
+
+            <label className="block text-sm font-medium text-gray-700">
+              Attachments (optional)
+              <input
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={(event) =>
+                  setFiles(Array.from(event.target.files || []))
+                }
+                className={inputClass}
+              />
+              <span className="mt-1 block text-xs font-normal text-gray-500">
+                Images, PDFs, and Word documents are supported.
+              </span>
             </label>
-            <input
-              type="file"
-              multiple
-              accept="image/*,.pdf,.doc,.docx"
-              onChange={(e) => setFiles(e.target.files)}
-              className="w-full rounded border border-gray-300 p-2 text-gray-900"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              You can attach images, PDFs, or Word documents. Multiple files
-              allowed.
-            </p>
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded bg-brand-deep px-4 py-2 font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
-          >
-            {loading ? "Submitting..." : "Submit Request"}
-          </button>
+
+            <button
+              type="submit"
+              disabled={loading || equipmentNotReady}
+              className="rounded-lg bg-brand-deep px-5 py-2.5 font-medium text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Submitting..." : "Submit Request"}
+            </button>
+          </fieldset>
         </form>
-      </div>
+      </main>
     </div>
   );
 }

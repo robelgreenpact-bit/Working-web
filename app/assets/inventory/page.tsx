@@ -3,302 +3,693 @@
 import { useEffect, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 
-type InventoryItem = {
-  category: string;
-  item_name: string | null;
-  total_count: number;
-  available_count: number;
-  borrowed_count: number;
-  under_repair_count: number;
-};
-
 type InventoryAsset = {
   id: string;
   asset_tag: string;
-  category: string | null;
+  category: string;
+  electronics_subcategory: string | null;
   item_name: string | null;
   serial_number: string | null;
   location: string | null;
   status: string;
-  due_date: string | null;
+  asset_condition: string;
+  is_available: boolean;
   current_holder: string | null;
 };
 
+type InventoryResponse = {
+  assets: InventoryAsset[];
+  can_manage: boolean;
+};
+
+type ItemGroup = {
+  key: string;
+  category: string;
+  electronicsType: string | null;
+  name: string;
+  assets: InventoryAsset[];
+};
+
+const categoryLabels: Record<string, string> = {
+  electronics: "Electronics",
+  furniture: "Furniture",
+  vehicle: "Vehicles",
+  office_supplies: "Office Supplies",
+  other: "Other",
+};
+
+const typeLabels: Record<string, string> = {
+  tablet: "Tablet",
+  pc: "PC",
+  other: "Other electronics",
+};
+
+const statusLabels: Record<string, string> = {
+  available: "Available",
+  borrowed: "Borrowed",
+  return_requested: "Return requested",
+  under_repair: "Under Repair",
+  retired: "Retired",
+  reserved: "Reserved",
+  assigned: "Assigned",
+  unavailable: "Unavailable",
+};
+
+const statusColors: Record<string, string> = {
+  available: "bg-green-100 text-green-800",
+  borrowed: "bg-blue-100 text-blue-800",
+  return_requested: "bg-orange-100 text-orange-800",
+  under_repair: "bg-amber-100 text-amber-800",
+  retired: "bg-gray-200 text-gray-700",
+  reserved: "bg-purple-100 text-purple-800",
+  assigned: "bg-slate-100 text-slate-700",
+  unavailable: "bg-gray-100 text-gray-700",
+};
+
+const inputClass =
+  "mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-brand-deep focus:outline-none focus:ring-2 focus:ring-brand-deep/20";
+
+function countAssets(assets: InventoryAsset[]) {
+  return {
+    total: assets.length,
+    available: assets.filter((asset) => asset.status === "available")
+      .length,
+    borrowed: assets.filter((asset) =>
+      ["borrowed", "return_requested"].includes(asset.status),
+    ).length,
+    underRepair: assets.filter(
+      (asset) => asset.status === "under_repair",
+    ).length,
+    returnRequested: assets.filter(
+      (asset) => asset.status === "return_requested",
+    ).length,
+    retired: assets.filter((asset) => asset.status === "retired")
+      .length,
+    reserved: assets.filter((asset) => asset.status === "reserved")
+      .length,
+    assigned: assets.filter((asset) => asset.status === "assigned")
+      .length,
+    unavailable: assets.filter(
+      (asset) =>
+        ![
+          "available",
+          "borrowed",
+          "return_requested",
+          "under_repair",
+          "retired",
+          "reserved",
+          "assigned",
+        ].includes(asset.status),
+    ).length,
+  };
+}
+
 export default function InventoryPage() {
-  const [inventoryAssets, setInventoryAssets] = useState<InventoryAsset[]>([]);
+  const [data, setData] = useState<InventoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [serialSearch, setSerialSearch] = useState("");
-  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
+
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
 
-  useEffect(() => {
-    fetch("/api/assets/inventory")
-      .then((res) => res.json())
-      .then((data) => {
-        setInventoryAssets(data.assets || []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, []);
+  const [expandedItems, setExpandedItems] = useState<
+    Record<string, boolean>
+  >({});
 
-  const filteredAssets = inventoryAssets.filter((asset) =>
-    locationFilter === "all" || asset.location === locationFilter,
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadInventory() {
+      try {
+        const response = await fetch("/api/assets/inventory", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Unable to load inventory.",
+          );
+        }
+
+        if (!Array.isArray(result.assets)) {
+          throw new Error("The inventory response is incomplete.");
+        }
+
+        if (!controller.signal.aborted) {
+          setData({
+            assets: result.assets,
+            can_manage: result.can_manage === true,
+          });
+          setError("");
+        }
+      } catch (loadError) {
+        if (!controller.signal.aborted) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Unable to load inventory.",
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadInventory();
+
+    return () => controller.abort();
+  }, [refreshVersion]);
+
+  function refresh() {
+    setLoading(true);
+    setError("");
+    setRefreshVersion((previous) => previous + 1);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setCategoryFilter("all");
+    setTypeFilter("all");
+    setLocationFilter("all");
+  }
+
+  const assets = data?.assets || [];
+  const canManage = data?.can_manage === true;
+
+  const locations = Array.from(
+    new Set(
+      assets
+        .map((asset) => asset.location)
+        .filter((location): location is string => Boolean(location)),
+    ),
+  ).sort();
+
+  const searchText = search.trim().toLowerCase();
+
+  const filteredAssets = assets.filter((asset) => {
+    const searchableValues = [
+      asset.item_name,
+      asset.asset_tag,
+      asset.current_holder,
+      ...(canManage ? [asset.serial_number] : []),
+    ];
+
+    const matchesSearch =
+      !searchText ||
+      searchableValues.some((value) =>
+        value?.toLowerCase().includes(searchText),
+      );
+
+    const matchesCategory =
+      categoryFilter === "all" ||
+      asset.category === categoryFilter;
+
+    const matchesType =
+      typeFilter === "all" ||
+      (asset.category === "electronics" &&
+        asset.electronics_subcategory === typeFilter);
+
+    const matchesLocation =
+      locationFilter === "all" ||
+      asset.location === locationFilter;
+
+    return (
+      matchesSearch &&
+      matchesCategory &&
+      matchesType &&
+      matchesLocation
+    );
+  });
+
+  const groupMap = new Map<string, ItemGroup>();
+
+  for (const asset of filteredAssets) {
+    const category = asset.category || "other";
+    const electronicsType =
+      category === "electronics"
+        ? asset.electronics_subcategory
+        : null;
+
+    const name = asset.item_name?.trim() || "";
+
+    const key = JSON.stringify([
+      category,
+      electronicsType,
+      name.toLowerCase(),
+    ]);
+
+    let group = groupMap.get(key);
+
+    if (!group) {
+      group = {
+        key,
+        category,
+        electronicsType,
+        name: name || "Unnamed item",
+        assets: [],
+      };
+
+      groupMap.set(key, group);
+    }
+
+    group.assets.push(asset);
+  }
+
+  const groups = Array.from(groupMap.values()).sort(
+    (a, b) =>
+      a.category.localeCompare(b.category) ||
+      (a.electronicsType || "").localeCompare(
+        b.electronicsType || "",
+      ) ||
+      a.name.localeCompare(b.name),
   );
 
-  const inventory = filteredAssets.reduce((items, asset) => {
-    const category = asset.category || "other";
-    const key = `${category}-${asset.item_name || "unnamed"}`;
-    let item = items.find((entry) => `${entry.category}-${entry.item_name || "unnamed"}` === key);
-    if (!item) {
-      item = {
-        category,
-        item_name: asset.item_name,
-        total_count: 0,
-        available_count: 0,
-        borrowed_count: 0,
-        under_repair_count: 0,
-      };
-      items.push(item);
-    }
-    item.total_count++;
-    if (asset.status === "available") item.available_count++;
-    if (asset.status === "borrowed" || asset.status === "return_requested") item.borrowed_count++;
-    if (asset.status === "under_repair") item.under_repair_count++;
-    return items;
-  }, [] as InventoryItem[]);
+  for (const group of groups) {
+    group.assets.sort((a, b) =>
+      a.asset_tag.localeCompare(b.asset_tag),
+    );
+  }
 
-  const matchingAssets = serialSearch.trim()
-    ? filteredAssets.filter((asset) =>
-        asset.serial_number?.toLowerCase().includes(serialSearch.trim().toLowerCase()),
-      )
-    : [];
+  const counts = countAssets(filteredAssets);
+
+  const otherCount =
+    counts.retired +
+    counts.reserved +
+    counts.assigned +
+    counts.unavailable;
+
+  const hasFilters =
+    Boolean(searchText) ||
+    categoryFilter !== "all" ||
+    typeFilter !== "all" ||
+    locationFilter !== "all";
+
+  const summaries = [
+    {
+      label: "Total",
+      value: counts.total,
+      color: "text-brand-deep",
+    },
+    {
+      label: "Available",
+      value: counts.available,
+      color: "text-green-700",
+    },
+    {
+      label: "Borrowed",
+      value: counts.borrowed,
+      color: "text-blue-700",
+    },
+    {
+      label: "Under Repair",
+      value: counts.underRepair,
+      color: "text-amber-700",
+    },
+  ];
 
   return (
     <div>
       <Navbar title="Inventory" />
-      <div className="mx-auto max-w-6xl p-8">
-        <div className="mb-8 flex items-center justify-between fade-in">
+
+      <main className="mx-auto max-w-7xl p-4 sm:p-8">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-brand-deep">Inventory Overview</h1>
-            <p className="mt-1 text-sm text-gray-500">Track and manage all inventory items</p>
+            <h1 className="text-3xl font-bold text-brand-deep">
+              Inventory Overview
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              View stock by item and inspect each registered device.
+            </p>
           </div>
-          <a
-            href="/assets"
-            className="rounded-full bg-gray-100 px-6 py-3 font-medium text-gray-700 shadow-md transition-all duration-200 hover:bg-gray-200 hover:shadow-lg hover:scale-105"
-          >
-            ← Back to Assets
-          </a>
-        </div>
 
-        <div className="rounded-2xl border-t-4 border-brand bg-white/95 backdrop-blur-sm p-6 shadow-xl fade-in">
-          <label className="mb-5 block max-w-xl">
-            <span className="mb-2 block text-sm font-medium text-gray-700">
-              Search by serial number
-            </span>
-            <input
-              type="search"
-              value={serialSearch}
-              onChange={(e) => setSerialSearch(e.target.value)}
-              placeholder="Enter a serial number, especially for tablets"
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-brand-deep focus:ring-2 focus:ring-brand-deep/20 focus:outline-none"
-            />
-          </label>
-
-          <label className="mb-5 block max-w-xs">
-            <span className="mb-2 block text-sm font-medium text-gray-700">Location</span>
-            <select
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900"
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/assets/borrowed"
+              className="rounded-lg bg-brand-deep px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-dark"
             >
-              <option value="all">All locations</option>
-              <option value="Bahir Dar Office">Bahir Dar Office</option>
-              <option value="Addis Ababa Office">Addis Ababa Office</option>
-            </select>
-          </label>
+              Borrowed & Returns
+            </a>
 
-          {serialSearch.trim() && !loading && (
-            <div className="mb-8">
-              <h2 className="mb-3 text-lg font-semibold text-brand-deep">
-                Matching assets
-              </h2>
-              {matchingAssets.length === 0 ? (
-                <p className="text-sm text-gray-500">No assets match that serial number.</p>
-              ) : (
-                <div className="overflow-x-auto rounded-xl border border-gray-200">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 text-gray-600">
-                        <th className="px-4 py-3 font-semibold">Item</th>
-                        <th className="px-4 py-3 font-semibold">Serial Number</th>
-                        <th className="px-4 py-3 font-semibold">Asset Tag</th>
-                        <th className="px-4 py-3 font-semibold">Category</th>
-                        <th className="px-4 py-3 font-semibold">Status</th>
-                        <th className="px-4 py-3 font-semibold">Holder</th>
-                        <th className="px-4 py-3 font-semibold">Location</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {matchingAssets.map((asset) => (
-                        <tr key={asset.id} className="border-t border-gray-100">
-                          <td className="px-4 py-3 font-medium text-gray-900">{asset.item_name || "—"}</td>
-                          <td className="px-4 py-3 font-mono text-xs">{asset.serial_number}</td>
-                          <td className="px-4 py-3 font-mono text-xs">{asset.asset_tag}</td>
-                          <td className="px-4 py-3">{(asset.category || "other").replaceAll("_", " ")}</td>
-                          <td className="px-4 py-3 capitalize">{asset.status.replaceAll("_", " ")}</td>
-                          <td className="px-4 py-3">{asset.current_holder || "—"}</td>
-                          <td className="px-4 py-3">{asset.location || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+            <a
+              href="/assets"
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700"
+            >
+              Asset Registry
+            </a>
 
-          {loading ? (
-            <div className="space-y-4">
-              <div className="h-8 shimmer rounded-lg" />
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="h-12 w-24 shimmer rounded-lg" />
-                    <div className="h-12 flex-1 shimmer rounded-lg" />
-                    <div className="h-12 w-16 shimmer rounded-lg" />
-                    <div className="h-12 w-16 shimmer rounded-lg" />
-                    <div className="h-12 w-16 shimmer rounded-lg" />
-                    <div className="h-12 w-32 shimmer rounded-lg" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : inventory.length === 0 ? (
-            <p className="text-gray-500">No inventory data found.</p>
-          ) : (
-            <div className="space-y-8">
-              {(() => {
-                // Group inventory by category
-                const grouped = inventory.reduce((acc, item) => {
-                  const cat = item.category || "other";
-                  if (!acc[cat]) acc[cat] = [];
-                  acc[cat].push(item);
-                  return acc;
-                }, {} as Record<string, typeof inventory>);
-
-                const categoryLabels: Record<string, string> = {
-                  electronics: "Electronics",
-                  furniture: "Furniture",
-                  vehicle: "Vehicles",
-                  office_supplies: "Office Supplies",
-                  other: "Other",
-                };
-
-                const categoryIcons: Record<string, string> = {
-                  electronics: "💻",
-                  furniture: "🪑",
-                  vehicle: "🚗",
-                  office_supplies: "📦",
-                  other: "📦",
-                };
-
-                return Object.entries(grouped).map(([category, items]) => (
-                  <div key={category} className="fade-in">
-                    <div 
-                      className="mb-4 flex items-center justify-between gap-3 border-b-2 border-brand/20 pb-3 cursor-pointer hover:bg-gray-50 transition-colors rounded-lg px-2 -mx-2"
-                      onClick={() => setCollapsedCategories({
-                        ...collapsedCategories,
-                        [category]: !collapsedCategories[category]
-                      })}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-3xl">{categoryIcons[category] || "📦"}</span>
-                        <div>
-                          <h3 className="text-xl font-bold text-brand-deep">
-                            {categoryLabels[category] || category}
-                          </h3>
-                          <p className="text-sm text-gray-500">{items.length} item type{items.length !== 1 ? 's' : ''}</p>
-                        </div>
-                      </div>
-                      <button className="text-2xl text-gray-400 hover:text-brand-deep transition-colors">
-                        {collapsedCategories[category] ? '▶' : '▼'}
-                      </button>
-                    </div>
-                    {!collapsedCategories[category] && (
-                      <div className="overflow-x-auto rounded-xl border border-gray-200">
-                        <table className="w-full text-left text-sm">
-                        <thead>
-                          <tr className="bg-gray-50 text-gray-600">
-                            <th className="px-4 py-3 font-semibold">Item Name</th>
-                            <th className="px-4 py-3 text-center font-semibold">Total</th>
-                            <th className="px-4 py-3 text-center font-semibold">Available</th>
-                            <th className="px-4 py-3 text-center font-semibold">Borrowed</th>
-                            <th className="px-4 py-3 text-center font-semibold">Under Repair</th>
-                          </tr>
-                        </thead>
-                          {items.map((item, index) => {
-                            const itemKey = `${item.category}-${item.item_name}-${index}`;
-                            const details = filteredAssets.filter(
-                              (asset) => asset.category === item.category && asset.item_name === item.item_name,
-                            );
-                            return (
-                              <tbody key={itemKey}>
-                                <tr className="border-b border-gray-100 hover:bg-brand/5 transition-colors">
-                                  <td className="px-4 py-3 font-medium text-gray-900">
-                                    <button
-                                      type="button"
-                                      onClick={() => setExpandedItems({ ...expandedItems, [itemKey]: !expandedItems[itemKey] })}
-                                      className="mr-2 text-brand-deep"
-                                      aria-expanded={Boolean(expandedItems[itemKey])}
-                                    >
-                                      {expandedItems[itemKey] ? "−" : "+"}
-                                    </button>
-                                    {item.item_name || "—"}
-                                  </td>
-                                  <td className="px-4 py-3 text-center">{item.total_count}</td>
-                                  <td className={`px-4 py-3 text-center font-semibold ${item.available_count === 0 ? "text-red-700" : item.available_count <= 2 ? "text-amber-700" : "text-green-700"}`}>{item.available_count}</td>
-                                  <td className="px-4 py-3 text-center">{item.borrowed_count}</td>
-                                  <td className="px-4 py-3 text-center">{item.under_repair_count}</td>
-                                </tr>
-                                {expandedItems[itemKey] && details.map((asset) => (
-                                  <tr key={asset.id} className="border-b border-gray-100 bg-gray-50 text-xs">
-                                    <td className="px-4 py-2 pl-10">{asset.asset_tag} · {asset.serial_number || "No serial"}</td>
-                                    <td className="px-4 py-2" colSpan={2}>{asset.location || "No location"}</td>
-                                    <td className="px-4 py-2 capitalize">{asset.current_holder || asset.status.replaceAll("_", " ")}</td>
-                                    <td className="px-4 py-2 capitalize">{asset.status.replaceAll("_", " ")}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            );
-                          })}
-                      </table>
-                    </div>
-                    )}
-                  </div>
-                ));
-              })()}
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={loading}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 disabled:opacity-50"
+            >
+              {loading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            { label: "Total", value: filteredAssets.length, color: "text-brand-deep" },
-            { label: "Available", value: filteredAssets.filter((asset) => asset.status === "available").length, color: "text-green-700" },
-            { label: "Borrowed", value: filteredAssets.filter((asset) => ["borrowed", "overdue", "return_requested"].includes(asset.status)).length, color: "text-amber-700" },
-            { label: "Return Pending", value: filteredAssets.filter((asset) => asset.status === "return_requested").length, color: "text-orange-700" },
-            { label: "Under Repair", value: filteredAssets.filter((asset) => asset.status === "under_repair").length, color: "text-red-700" },
-          ].map((summary) => (
-            <div key={summary.label} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-sm font-medium text-gray-500">{summary.label}</p>
-              <p className={`mt-2 text-2xl font-bold ${summary.color}`}>{summary.value}</p>
+        {error && (
+          <div
+            role="alert"
+            className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          >
+            {error}
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={loading}
+              className="ml-3 font-medium underline disabled:opacity-50"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="text-sm font-medium text-gray-700">
+              Search
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={
+                  canManage
+                    ? "Item, code, serial, or worker"
+                    : "Item, code, or worker"
+                }
+                className={inputClass}
+              />
+            </label>
+
+            <label className="text-sm font-medium text-gray-700">
+              Category
+              <select
+                value={categoryFilter}
+                onChange={(event) => {
+                  setCategoryFilter(event.target.value);
+                  setTypeFilter("all");
+                }}
+                className={inputClass}
+              >
+                <option value="all">All categories</option>
+                {Object.entries(categoryLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-medium text-gray-700">
+              Electronics type
+              <select
+                value={typeFilter}
+                onChange={(event) => {
+                  setTypeFilter(event.target.value);
+
+                  if (event.target.value !== "all") {
+                    setCategoryFilter("electronics");
+                  }
+                }}
+                className={inputClass}
+              >
+                <option value="all">All types</option>
+                <option value="tablet">Tablet</option>
+                <option value="pc">PC</option>
+                <option value="other">Other electronics</option>
+              </select>
+            </label>
+
+            <label className="text-sm font-medium text-gray-700">
+              Location
+              <select
+                value={locationFilter}
+                onChange={(event) =>
+                  setLocationFilter(event.target.value)
+                }
+                className={inputClass}
+              >
+                <option value="all">All locations</option>
+                {locations.map((location) => (
+                  <option key={location} value={location}>
+                    {location}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {hasFilters && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-gray-500">
+                Counts and device lists reflect the current filters.
+              </p>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-sm font-medium text-brand-deep underline"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
+        </section>
+
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {summaries.map((summary) => (
+            <div
+              key={summary.label}
+              className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+            >
+              <p className="text-sm font-medium text-gray-500">
+                {summary.label}
+              </p>
+              <p className={`mt-2 text-3xl font-bold ${summary.color}`}>
+                {loading || error ? "—" : summary.value}
+              </p>
             </div>
           ))}
         </div>
-      </div>
+
+        {!loading && !error && (
+          <div className="mb-6 space-y-1 text-sm text-gray-600">
+            <p>
+              Borrowed includes {counts.returnRequested} device
+              {counts.returnRequested === 1 ? "" : "s"} awaiting
+              return confirmation.
+            </p>
+
+            {otherCount > 0 && (
+              <p>
+                Total also includes: {counts.retired} retired,{" "}
+                {counts.reserved} reserved, {counts.assigned} assigned,
+                and {counts.unavailable} otherwise unavailable.
+              </p>
+            )}
+          </div>
+        )}
+
+        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-brand-deep">
+              Stock by item
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Select an item to see its individual devices.
+            </p>
+          </div>
+
+          {loading ? (
+            <p role="status" className="py-8 text-center text-gray-500">
+              Loading inventory...
+            </p>
+          ) : error ? (
+            <p className="py-8 text-center text-gray-500">
+              Inventory could not be loaded. Use Retry above.
+            </p>
+          ) : groups.length === 0 ? (
+            <p className="py-8 text-center text-gray-500">
+              {hasFilters
+                ? "No devices match these filters."
+                : "No registered inventory was found."}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="px-4 py-3">Item name</th>
+                    <th className="px-4 py-3 text-center">Total</th>
+                    <th className="px-4 py-3 text-center">Available</th>
+                    <th className="px-4 py-3 text-center">Borrowed</th>
+                    <th className="px-4 py-3 text-center">
+                      Under Repair
+                    </th>
+                  </tr>
+                </thead>
+
+                {groups.map((group) => {
+                  const itemCounts = countAssets(group.assets);
+                  const expanded = Boolean(expandedItems[group.key]);
+
+                  const additionalCount =
+                    itemCounts.retired +
+                    itemCounts.reserved +
+                    itemCounts.assigned +
+                    itemCounts.unavailable;
+
+                  return (
+                    <tbody key={group.key}>
+                      <tr className="border-t border-gray-200 hover:bg-gray-50">
+                        <td className="px-4 py-4">
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            onClick={() =>
+                              setExpandedItems((previous) => ({
+                                ...previous,
+                                [group.key]: !previous[group.key],
+                              }))
+                            }
+                            className="flex items-start gap-3 text-left"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="mt-0.5 font-bold text-brand-deep"
+                            >
+                              {expanded ? "−" : "+"}
+                            </span>
+
+                            <span>
+                              <span className="block font-semibold text-gray-900">
+                                {group.name}
+                              </span>
+                              <span className="mt-1 block text-xs text-gray-500">
+                                {categoryLabels[group.category] ||
+                                  group.category}
+                                {group.electronicsType
+                                  ? ` · ${
+                                      typeLabels[group.electronicsType] ||
+                                      group.electronicsType
+                                    }`
+                                  : ""}
+                              </span>
+                            </span>
+                          </button>
+                        </td>
+
+                        <td className="px-4 py-4 text-center font-semibold">
+                          {itemCounts.total}
+                        </td>
+                        <td className="px-4 py-4 text-center font-semibold text-green-700">
+                          {itemCounts.available}
+                        </td>
+                        <td className="px-4 py-4 text-center font-semibold text-blue-700">
+                          {itemCounts.borrowed}
+                        </td>
+                        <td className="px-4 py-4 text-center font-semibold text-amber-700">
+                          {itemCounts.underRepair}
+                        </td>
+                      </tr>
+
+                      {expanded && (
+                        <tr className="border-t border-gray-100">
+                          <td colSpan={5} className="bg-gray-50 p-4">
+                            {additionalCount > 0 && (
+                              <p className="mb-3 text-xs text-gray-600">
+                                Also included in this item’s total:{" "}
+                                {itemCounts.retired} retired,{" "}
+                                {itemCounts.reserved} reserved,{" "}
+                                {itemCounts.assigned} assigned, and{" "}
+                                {itemCounts.unavailable} unavailable.
+                              </p>
+                            )}
+
+                            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                              <table className="w-full text-left text-xs">
+                                <thead className="bg-gray-100 text-gray-600">
+                                  <tr>
+                                    <th className="px-3 py-3">
+                                      Asset code
+                                    </th>
+                                    {canManage && (
+                                      <th className="px-3 py-3">
+                                        Serial number
+                                      </th>
+                                    )}
+                                    <th className="px-3 py-3">
+                                      Location
+                                    </th>
+                                    <th className="px-3 py-3">
+                                      Current holder
+                                    </th>
+                                    <th className="px-3 py-3">
+                                      Status
+                                    </th>
+                                  </tr>
+                                </thead>
+
+                                <tbody>
+                                  {group.assets.map((asset) => (
+                                    <tr
+                                      key={asset.id}
+                                      className="border-t border-gray-100"
+                                    >
+                                      <td className="px-3 py-3 font-mono font-medium text-brand-deep">
+                                        {asset.asset_tag}
+                                      </td>
+
+                                      {canManage && (
+                                        <td className="px-3 py-3 font-mono">
+                                          {asset.serial_number ||
+                                            "Not recorded"}
+                                        </td>
+                                      )}
+
+                                      <td className="px-3 py-3">
+                                        {asset.location || "Not recorded"}
+                                      </td>
+
+                                      <td className="px-3 py-3">
+                                        {asset.current_holder || "—"}
+                                      </td>
+
+                                      <td className="px-3 py-3">
+                                        <span
+                                          className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 font-medium ${
+                                            statusColors[asset.status] ||
+                                            statusColors.unavailable
+                                          }`}
+                                        >
+                                          {statusLabels[asset.status] ||
+                                            asset.status}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  );
+                })}
+              </table>
+            </div>
+          )}
+        </section>
+      </main>
     </div>
   );
 }

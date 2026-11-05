@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 function Badge({ count }: { count: number }) {
-  if (!count) return null;
+  if (!Number.isFinite(count) || count <= 0) return null;
+
   return (
-    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-accent px-1 text-xs font-bold text-white shadow-lg pulse">
+    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-accent px-1 text-xs font-bold text-white">
       {count}
     </span>
   );
@@ -23,60 +25,152 @@ function NavLink({
   href: string;
   active: boolean;
   onClick?: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <a
+    <Link
       href={href}
       onClick={onClick}
-      className={`flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
         active
-          ? "bg-brand-deep text-white shadow-lg scale-105"
-          : "text-brand-deep hover:bg-brand/20 hover:scale-105"
+          ? "bg-brand-deep text-white shadow"
+          : "text-brand-deep hover:bg-brand/20"
       }`}
     >
       {children}
-    </a>
+    </Link>
   );
 }
 
 export default function Navbar({ title }: { title: string }) {
-  void title;
   const router = useRouter();
   const pathname = usePathname();
+
   const [role, setRole] = useState<string | null>(null);
   const [name, setName] = useState<string | null>(null);
   const [badges, setBadges] = useState<Record<string, number>>({});
   const [menuOpen, setMenuOpen] = useState(false);
   const [assetsDropdownOpen, setAssetsDropdownOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
 
   useEffect(() => {
-    fetch("/api/dashboard-role")
-      .then((res) => res.json())
-      .then((data) => {
-        setRole(data.role || null);
-        setName(data.name || null);
-      })
-      .catch(() => {});
+    const controller = new AbortController();
+    let active = true;
+    let badgesLoading = false;
 
-    const loadBadges = () => {
-      fetch("/api/nav-badges")
-        .then((res) => res.json())
-        .then((data) => setBadges(data))
-        .catch(() => {});
+    async function loadProfile() {
+      try {
+        const response = await fetch("/api/dashboard-role", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        if (active) {
+          setRole(typeof data.role === "string" ? data.role : null);
+          setName(typeof data.name === "string" ? data.name : null);
+        }
+      } catch {
+        // Page APIs enforce their own authentication and permissions.
+      }
+    }
+
+    async function loadBadges() {
+      if (badgesLoading || !active) return;
+
+      badgesLoading = true;
+
+      try {
+        const response = await fetch("/api/nav-badges", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        if (!response.ok) return;
+
+        const data: unknown = await response.json();
+
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+          return;
+        }
+
+        const next: Record<string, number> = {};
+
+        for (const [key, value] of Object.entries(data)) {
+          if (
+            typeof value === "number" &&
+            Number.isFinite(value) &&
+            value >= 0
+          ) {
+            next[key] = value;
+          }
+        }
+
+        if (active) setBadges(next);
+      } catch {
+        // A badge failure should not hide navigation.
+      } finally {
+        badgesLoading = false;
+      }
+    }
+
+    void loadProfile();
+    void loadBadges();
+
+    const interval = window.setInterval(() => {
+      void loadBadges();
+    }, 30000);
+
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearInterval(interval);
     };
-
-    loadBadges();
-    const interval = setInterval(loadBadges, 30000);
-    return () => clearInterval(interval);
   }, []);
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  };
+  useEffect(() => {
+    setMenuOpen(false);
+    setAssetsDropdownOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setAssetsDropdownOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+    setLogoutError("");
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signOut();
+
+      if (error) throw error;
+
+      router.replace("/login");
+      router.refresh();
+    } catch {
+      setLogoutError("Unable to log out. Please try again.");
+    } finally {
+      setLoggingOut(false);
+    }
+  }
 
   const homeHref =
     role === "admin"
@@ -89,36 +183,118 @@ export default function Navbar({ title }: { title: string }) {
             ? "/accountant"
             : "/worker";
 
-  const canSeeAssets =
-    role === "admin" || role === "manager" || role === "finance";
-  const canSeeReports =
-    role === "admin" || role === "manager" || role === "finance";
-  const canSeeTaxRegistry =
-    role === "admin" || role === "manager" || role === "finance";
-  const canSeeRegisterQueue = role === "accountant";
-  const canSeeLeave = role !== "manager";
+  const canSeeAssets = ["admin", "manager", "finance"].includes(
+    role || "",
+  );
+  const canSeeReports = canSeeAssets;
+  const canSeeTaxRegistry = canSeeAssets;
 
-  const isActive = (path: string) => pathname === path;
-  const closeMenu = () => setMenuOpen(false);
+  const canSeeBorrowed = [
+    "worker",
+    "manager",
+    "finance",
+    "admin",
+    "accountant",
+  ].includes(role || "");
+
+  const canSeeLeave = Boolean(role) && role !== "manager";
+
+  function closeMenu() {
+    setMenuOpen(false);
+    setAssetsDropdownOpen(false);
+  }
+
+  function isActive(path: string) {
+    return pathname === path;
+  }
+
+  const extraLinks: {
+    href: string;
+    label: string;
+    badge?: number;
+  }[] = [];
+
+  if (canSeeReports) {
+    extraLinks.push({ href: "/reports", label: "Reports" });
+  }
+
+  if (canSeeTaxRegistry) {
+    extraLinks.push({
+      href: "/admin/registrations",
+      label: "Tax Registry",
+    });
+  }
+
+  if (canSeeLeave) {
+    extraLinks.push({ href: "/leave", label: "Leave" });
+  }
+
+  if (role === "admin") {
+    extraLinks.push(
+      { href: "/admin/requests", label: "My Requests" },
+      { href: "/admin/users", label: "Users" },
+    );
+  }
+
+  if (role === "manager") {
+    extraLinks.push(
+      {
+        href: "/manager/approvals",
+        label: "Approvals",
+        badge: badges.approvals,
+      },
+      {
+        href: "/manager/payments",
+        label: "Payment Approvals",
+        badge: badges.payments,
+      },
+      { href: "/manager/leaves", label: "Leave Approvals" },
+    );
+  }
+
+  if (role === "finance") {
+    extraLinks.push(
+      {
+        href: "/finance/approvals",
+        label: "Approvals",
+        badge: badges.finance,
+      },
+      { href: "/finance/payments", label: "Payment Requests" },
+    );
+  }
+
+  if (role === "accountant") {
+    extraLinks.push(
+      { href: "/accountant/requests", label: "My Requests" },
+      { href: "/accountant/register", label: "Register" },
+    );
+  }
 
   const links = (
     <>
-      <NavLink href={homeHref} active={isActive(homeHref)} onClick={closeMenu}>
-        Dashboard
-      </NavLink>
+      {role && (
+        <NavLink
+          href={homeHref}
+          active={isActive(homeHref)}
+          onClick={closeMenu}
+        >
+          Dashboard
+        </NavLink>
+      )}
 
-      {canSeeAssets ? (
+      {canSeeAssets && (
         <div className="relative">
           <button
-            onClick={() => setAssetsDropdownOpen(!assetsDropdownOpen)}
-            className={`flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+            type="button"
+            aria-expanded={assetsDropdownOpen}
+            onClick={() => setAssetsDropdownOpen((open) => !open)}
+            className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
               isActive("/assets") || isActive("/assets/inventory")
-                ? "bg-brand-deep text-white shadow-lg scale-105"
-                : "text-brand-deep hover:bg-brand/20 hover:scale-105"
+                ? "bg-brand-deep text-white shadow"
+                : "text-brand-deep hover:bg-brand/20"
             }`}
           >
             Assets
-            <Badge count={badges.assetLoans || 0} />
             <svg
               width="12"
               height="12"
@@ -126,248 +302,177 @@ export default function Navbar({ title }: { title: string }) {
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              className={`transition-transform duration-200 ${assetsDropdownOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
+              className={assetsDropdownOpen ? "rotate-180" : ""}
             >
-              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M6 9l6 6 6-6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
+
           {assetsDropdownOpen && (
-            <div className="absolute left-0 top-full z-50 mt-2 rounded-xl border border-gray-200 bg-white/95 backdrop-blur-sm p-2 shadow-xl fade-in min-w-40">
-              <a
-                href="/assets"
-                onClick={() => {
-                  setAssetsDropdownOpen(false);
-                  closeMenu();
-                }}
-                className={`block rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                  isActive("/assets")
-                    ? "bg-brand-deep text-white shadow-md"
-                    : "text-brand-deep hover:bg-brand/10 hover:shadow-md"
-                }`}
-              >
-                Asset Registry
-              </a>
-              <a
-                href="/assets/inventory"
-                onClick={() => {
-                  setAssetsDropdownOpen(false);
-                  closeMenu();
-                }}
-                className={`block rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                  isActive("/assets/inventory")
-                    ? "bg-brand-deep text-white shadow-md"
-                    : "text-brand-deep hover:bg-brand/10 hover:shadow-md"
-                }`}
-              >
-                Inventory
-              </a>
+            <div className="z-50 mt-2 min-w-44 space-y-1 rounded-xl border bg-white p-2 shadow-xl lg:absolute lg:left-0 lg:top-full">
+              {[
+                { href: "/assets", label: "Asset Registry" },
+                { href: "/assets/inventory", label: "Inventory" },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={closeMenu}
+                  aria-current={isActive(item.href) ? "page" : undefined}
+                  className={`block rounded-lg px-4 py-2.5 text-sm font-medium ${
+                    isActive(item.href)
+                      ? "bg-brand-deep text-white"
+                      : "text-brand-deep hover:bg-brand/10"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
             </div>
           )}
         </div>
-      ) : null}
+      )}
 
-      {canSeeReports ? (
+     {canSeeBorrowed && (
+  <NavLink
+    href="/assets/borrowed"
+    active={isActive("/assets/borrowed")}
+    onClick={closeMenu}
+  >
+    Borrowed
+    {(role === "finance" || role === "admin") && (
+      <Badge count={badges.returns || 0} />
+    )}
+  </NavLink>
+)}
+
+      {extraLinks.map((item) => (
         <NavLink
-          href="/reports"
-          active={isActive("/reports")}
+          key={item.href}
+          href={item.href}
+          active={isActive(item.href)}
           onClick={closeMenu}
         >
-          Reports
+          {item.label}
+          <Badge count={item.badge || 0} />
         </NavLink>
-      ) : null}
-
-      {canSeeTaxRegistry ? (
-        <NavLink
-          href="/admin/registrations"
-          active={isActive("/admin/registrations")}
-          onClick={closeMenu}
-        >
-          Tax Registry
-        </NavLink>
-      ) : null}
-
-      {canSeeLeave ? (
-        <NavLink href="/leave" active={isActive("/leave")} onClick={closeMenu}>
-          Leave
-        </NavLink>
-      ) : null}
-
-      {role === "admin" ? (
-        <>
-          <NavLink
-            href="/admin/requests"
-            active={isActive("/admin/requests")}
-            onClick={closeMenu}
-          >
-            My Requests
-          </NavLink>
-
-          <NavLink
-            href="/admin/users"
-            active={isActive("/admin/users")}
-            onClick={closeMenu}
-          >
-            Users
-          </NavLink>
-        </>
-      ) : null}
-
-      {role === "manager" ? (
-        <>
-          <NavLink
-            href="/manager/approvals"
-            active={isActive("/manager/approvals")}
-            onClick={closeMenu}
-          >
-            Approvals
-            <Badge count={badges.approvals || 0} />
-          </NavLink>
-          <NavLink
-            href="/manager/payments"
-            active={isActive("/manager/payments")}
-            onClick={closeMenu}
-          >
-            Payment Approvals
-            <Badge count={badges.payments || 0} />
-          </NavLink>
-          <NavLink
-            href="/manager/leaves"
-            active={isActive("/manager/leaves")}
-            onClick={closeMenu}
-          >
-            Leave Approvals
-          </NavLink>
-        </>
-      ) : null}
-
-      {role === "finance" ? (
-        <>
-          <NavLink
-            href="/finance/approvals"
-            active={isActive("/finance/approvals")}
-            onClick={closeMenu}
-          >
-            Approvals
-            <Badge count={badges.finance || 0} />
-          </NavLink>
-          <NavLink
-            href="/finance/payments"
-            active={isActive("/finance/payments")}
-            onClick={closeMenu}
-          >
-            Payment Requests
-          </NavLink>
-        </>
-      ) : null}
-
-      {canSeeRegisterQueue ? (
-        <>
-          <NavLink
-            href="/accountant/requests"
-            active={isActive("/accountant/requests")}
-            onClick={closeMenu}
-          >
-            My Requests
-          </NavLink>
-          <NavLink
-            href="/accountant/register"
-            active={isActive("/accountant/register")}
-            onClick={closeMenu}
-          >
-            Register
-          </NavLink>
-        </>
-      ) : null}
+      ))}
     </>
   );
 
   return (
-    <div className="relative border-b border-brand-deep/10 bg-white/80 backdrop-blur-sm px-4 py-3 shadow-lg sm:px-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Image
-              src="/logo.png"
-              alt="Greenpact"
-              width={56}
-              height={56}
-              className="h-14 w-14 object-contain transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3"
-            />
-            <div className="absolute inset-0 rounded-full bg-brand/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" />
-          </div>
-          <div className="hidden flex-wrap items-center gap-2 md:flex">
+    <header className="relative z-40 border-b border-brand-deep/10 bg-white px-4 py-3 shadow-sm sm:px-6">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <Image
+            src="/logo.png"
+            alt="Greenpact"
+            width={56}
+            height={56}
+            className="h-14 w-14 shrink-0 object-contain"
+          />
+
+          <span className="truncate font-semibold text-brand-deep lg:hidden">
+            {title}
+          </span>
+
+          <nav
+            aria-label="Main navigation"
+            className="hidden flex-wrap items-center gap-1 lg:flex"
+          >
             {links}
-          </div>
+          </nav>
         </div>
 
-        <div className="flex items-center gap-3">
-          {name ? (
-            <div className="hidden items-center gap-2 rounded-full bg-brand/10 px-4 py-2 sm:flex">
-              <div className="h-8 w-8 rounded-full bg-brand-deep flex items-center justify-center text-white font-semibold text-sm">
+        <div className="flex shrink-0 items-center gap-3">
+          {name && (
+            <div className="hidden items-center gap-2 rounded-full bg-brand/10 px-3 py-2 xl:flex">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-deep text-sm font-semibold text-white">
                 {name.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-medium text-gray-700">{name}</span>
+              </span>
+              <span className="max-w-40 truncate text-sm font-medium text-gray-700">
+                {name}
+              </span>
             </div>
-          ) : null}
+          )}
+
           <button
-            onClick={handleLogout}
-            className="hidden rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-5 py-2 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 md:block"
+            type="button"
+            disabled={loggingOut}
+            onClick={() => void handleLogout()}
+            className="hidden rounded-full bg-brand-deep px-5 py-2 text-sm font-medium text-white disabled:opacity-50 lg:block"
           >
-            Log Out
+            {loggingOut ? "Logging out…" : "Log Out"}
           </button>
 
           <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-brand-deep hover:bg-brand/20 hover:scale-110 transition-all duration-200 md:hidden"
-            aria-label="Toggle menu"
+            type="button"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-navigation"
+            onClick={() => {
+              setMenuOpen((open) => !open);
+              setAssetsDropdownOpen(false);
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-brand-deep hover:bg-brand/20 lg:hidden"
           >
-            {menuOpen ? (
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="transition-transform duration-200 rotate-90"
-              >
-                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-              </svg>
-            ) : (
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M3 12h18M3 6h18M3 18h18" strokeLinecap="round" />
-              </svg>
-            )}
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path
+                d={
+                  menuOpen
+                    ? "M18 6L6 18M6 6l12 12"
+                    : "M3 12h18M3 6h18M3 18h18"
+                }
+                strokeLinecap="round"
+              />
+            </svg>
           </button>
         </div>
       </div>
 
-      {menuOpen ? (
-        <div className="absolute left-0 right-0 top-full z-50 flex flex-col gap-2 border-b border-brand-deep/10 bg-white/95 backdrop-blur-sm p-4 shadow-xl md:hidden fade-in">
-          {name ? (
-            <div className="flex items-center gap-3 rounded-full bg-brand/10 px-4 py-3">
-              <div className="h-10 w-10 rounded-full bg-brand-deep flex items-center justify-center text-white font-semibold">
-                {name.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-medium text-gray-700">{name}</span>
-            </div>
-          ) : null}
+      {logoutError && (
+        <p role="alert" className="mt-2 text-sm text-red-700">
+          {logoutError}
+        </p>
+      )}
+
+      {menuOpen && (
+        <nav
+          id="mobile-navigation"
+          aria-label="Mobile navigation"
+          className="absolute left-0 right-0 top-full z-50 flex max-h-[75vh] flex-col gap-2 overflow-y-auto border-b bg-white p-4 shadow-xl lg:hidden"
+        >
+          {name && (
+            <p className="rounded-lg bg-brand/10 px-4 py-3 text-sm font-medium text-gray-700">
+              {name}
+            </p>
+          )}
+
           {links}
+
           <button
-            onClick={handleLogout}
-            className="mt-2 rounded-full bg-linear-to-r from-brand-deep to-brand-dark px-4 py-3 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:shadow-xl"
+            type="button"
+            disabled={loggingOut}
+            onClick={() => void handleLogout()}
+            className="mt-2 rounded-full bg-brand-deep px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
           >
-            Log Out
+            {loggingOut ? "Logging out…" : "Log Out"}
           </button>
-        </div>
-      ) : null}
-    </div>
+        </nav>
+      )}
+    </header>
   );
 }

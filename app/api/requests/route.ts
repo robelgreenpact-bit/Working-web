@@ -12,213 +12,505 @@ const VALID_REQUEST_TYPES = [
   "per_diem",
 ];
 
-type RequestAssetRow = {
+const VALID_ASSET_CATEGORIES = [
+  "electronics",
+  "furniture",
+  "vehicle",
+  "office_supplies",
+  "other",
+];
+
+const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "other"];
+
+type ApprovalRow = {
+  decision: string;
+  comment: string | null;
+  role_at_time: string;
+  created_at: string;
+};
+
+type LoanRow = {
   id: string;
-  request_id: string;
-  fulfillment_mode: string;
-  source: string;
-  due_date: string | null;
+  asset_id: string;
+  borrowed_at: string | null;
+  return_requested_at: string | null;
+  returned_at: string | null;
+  return_condition: string | null;
   asset: {
     id: string;
     asset_tag: string;
     item_name: string | null;
-    serial_number: string | null;
   } | null;
 };
 
+type RequestRow = {
+  id: string;
+  status: string;
+  approvals: ApprovalRow[] | null;
+  equipment_loans: LoanRow[] | null;
+  [key: string]: unknown;
+};
+
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    },
+  );
+}
+
+function getText(formData: FormData, field: string): string {
+  const value = formData.get(field);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function fail(message: string, status = 400) {
+  return NextResponse.json({ error: message }, { status });
+}
+
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const formData = await request.formData();
-  const type = formData.get("type") as string;
-  const title = formData.get("title") as string;
-  const description = formData.get("description") as string;
-  const quantity = formData.get("quantity") as string;
-  const estimated_cost = formData.get("estimated_cost") as string;
-  const submittedAssetCategory = formData.get("asset_category") as string;
-  const itemName = formData.get("item_name") as string;
-  const electronicsSubcategory = formData.get("electronics_subcategory") as string;
-  const justification = formData.get("justification") as string;
-  const files = formData.getAll("files") as File[];
-
-  const needsCost = type !== "document_request" && type !== "per_diem" && type !== "electronics";
-  const needsAssetDetails = ["physical_good", "electronics", "other_asset"].includes(type);
-  const assetCategory = type === "electronics"
-    ? "electronics"
-    : submittedAssetCategory || "other";
-
-  if (!type || !title) {
-    return NextResponse.json(
-      { error: "Type and title are required" },
-      { status: 400 },
-    );
-  }
-
-  if (!VALID_REQUEST_TYPES.includes(type)) {
-    return NextResponse.json(
-      { error: "Invalid request type" },
-      { status: 400 },
-    );
-  }
-
-  if (needsCost && !estimated_cost) {
-    return NextResponse.json(
-      { error: "Estimated cost is required for this request type" },
-      { status: 400 },
-    );
-  }
-
-  if (
-    needsAssetDetails &&
-    !["electronics", "furniture", "vehicle", "office_supplies", "other"].includes(
-      type === "electronics" ? "electronics" : assetCategory,
-    )
-  ) {
-    return NextResponse.json({ error: "Invalid asset category" }, { status: 400 });
-  }
-  if (type === "electronics" && !["tablet", "pc"].includes(electronicsSubcategory)) {
-    return NextResponse.json({ error: "Electronics requests must specify Tablet or PC" }, { status: 400 });
-  }
-  if (needsAssetDetails && !itemName?.trim()) {
-    return NextResponse.json({ error: "Item name is required for asset requests" }, { status: 400 });
-  }
-  if (needsAssetDetails && !justification?.trim()) {
-    return NextResponse.json({ error: "Justification is required for asset requests" }, { status: 400 });
-  }
-  const requestedQuantity = Number(quantity || 1);
-  if (needsAssetDetails && (!Number.isInteger(requestedQuantity) || requestedQuantity < 1)) {
-    return NextResponse.json({ error: "Quantity must be a positive whole number" }, { status: 400 });
-  }
-
-  let canonicalItemName = (itemName || title).normalize("NFKC").trim().replace(/\s+/g, " ");
-  if (needsAssetDetails) {
-    const serviceClient = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
-    let itemQuery = serviceClient
-      .from("assets")
-      .select("item_name")
-      .eq("category", assetCategory)
-      .not("item_name", "is", null);
-    if (type === "electronics") {
-      itemQuery = itemQuery.eq("electronics_subcategory", electronicsSubcategory);
-    }
-    const { data: catalogItems, error: catalogError } = await itemQuery;
-    if (catalogError) {
-      return NextResponse.json({ error: catalogError.message }, { status: 500 });
-    }
-    const normalizedName = canonicalItemName.toLocaleLowerCase();
-    const canonicalMatch = (catalogItems || []).find(
-      (item) => item.item_name?.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase() === normalizedName,
-    );
-    if (canonicalMatch?.item_name) canonicalItemName = canonicalMatch.item_name.trim().replace(/\s+/g, " ");
-  }
-
-  const { data: newRequest, error } = await supabase
-    .from("requests")
-    .insert({
-      requester_id: user.id,
-      type,
-      title,
-      description: description || null,
-      quantity: needsAssetDetails ? requestedQuantity : needsCost ? (quantity ? Number(quantity) : 1) : null,
-      estimated_cost: needsCost ? Number(estimated_cost) : 0,
-      asset_category: needsAssetDetails ? assetCategory : null,
-      item_name: needsAssetDetails ? canonicalItemName : null,
-      electronics_subcategory: type === "electronics" ? electronicsSubcategory || null : null,
-      justification: justification || null,
-      status: "pending_manager",
-    })
-    .select()
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Upload attachments, if any
-  for (const file of files) {
-    if (!file || file.size === 0) continue;
-
-    const filePath = `requests/${newRequest.id}/${Date.now()}-${file.name}`;
-    const arrayBuffer = await file.arrayBuffer();
-
-    const { error: uploadError } = await supabase.storage
-      .from("attachments")
-      .upload(filePath, arrayBuffer, {
-        contentType: file.type,
-      });
-
-    if (uploadError) {
-      continue; // skip this file but don't fail the whole request
+    if (!user) {
+      return fail("Unauthorized", 401);
     }
 
-    await supabase.from("attachments").insert({
-      request_id: newRequest.id,
-      file_url: filePath,
-      uploaded_by: user.id,
-    });
-  }
+    const formData = await request.formData().catch(() => null);
 
-  return NextResponse.json({ request: newRequest });
+    if (!formData) {
+      return fail("Invalid form submission.");
+    }
+
+    const type = getText(formData, "type");
+    const submittedTitle = getText(formData, "title");
+    const description = getText(formData, "description");
+    const quantityText = getText(formData, "quantity");
+    const costText = getText(formData, "estimated_cost");
+    const submittedCategory = getText(formData, "asset_category");
+    const itemName = getText(formData, "item_name");
+    const requestedItemName = getText(
+      formData,
+      "requested_item_name",
+    );
+    const electronicsType = getText(
+      formData,
+      "electronics_subcategory",
+    );
+    const justification = getText(formData, "justification");
+
+    if (!VALID_REQUEST_TYPES.includes(type)) {
+      return fail("Select a valid request type.");
+    }
+
+    const needsAssetDetails = [
+      "physical_good",
+      "electronics",
+      "other_asset",
+    ].includes(type);
+
+    const isEquipment =
+      type === "electronics" &&
+      ["tablet", "pc"].includes(electronicsType);
+
+    // Preserve the existing cost rules for other request types.
+    const needsCost = ![
+      "document_request",
+      "per_diem",
+      "electronics",
+    ].includes(type);
+
+    const assetCategory =
+      type === "electronics"
+        ? "electronics"
+        : submittedCategory || "other";
+
+    if (
+      type === "electronics" &&
+      !VALID_ELECTRONICS_TYPES.includes(electronicsType)
+    ) {
+      return fail("Select Tablet, PC, or Other electronics.");
+    }
+
+    if (
+      needsAssetDetails &&
+      !VALID_ASSET_CATEGORIES.includes(assetCategory)
+    ) {
+      return fail("Select a valid asset category.");
+    }
+
+    // Accept the older item_name field as a fallback, but
+    // always save requested_item_name for Tablet/PC requests.
+    let canonicalItemName = isEquipment
+      ? requestedItemName || itemName
+      : itemName;
+
+    if (
+      isEquipment &&
+      requestedItemName &&
+      itemName &&
+      requestedItemName.toLowerCase() !== itemName.toLowerCase()
+    ) {
+      return fail(
+        "The selected item names do not match. Select the item again.",
+      );
+    }
+
+    if (needsAssetDetails && !canonicalItemName) {
+      return fail("Item name is required for this request.");
+    }
+
+    if (needsAssetDetails && !justification) {
+      return fail("Enter a justification for this request.");
+    }
+
+    let quantity: number | null = null;
+
+    if (needsAssetDetails || needsCost) {
+      // Equipment requests must explicitly provide a quantity.
+      if (isEquipment && !quantityText) {
+        return fail("Enter the number of devices requested.");
+      }
+
+      quantity = Number(quantityText || "1");
+
+      if (!Number.isSafeInteger(quantity) || quantity < 1) {
+        return fail("Quantity must be a positive whole number.");
+      }
+    }
+
+    let estimatedCost = 0;
+
+    if (needsCost) {
+      if (!costText) {
+        return fail(
+          "Estimated cost is required for this request type.",
+        );
+      }
+
+      estimatedCost = Number(costText);
+
+      if (!Number.isFinite(estimatedCost) || estimatedCost < 0) {
+        return fail("Estimated cost must be zero or greater.");
+      }
+    }
+
+    if (needsAssetDetails) {
+      const serviceClient = getServiceClient();
+      const normalizedName = canonicalItemName.trim().toLowerCase();
+
+      let matchedName: string | null = null;
+      let offset = 0;
+      const pageSize = 500;
+
+      while (true) {
+        let query = serviceClient
+          .from("assets")
+          .select("item_name")
+          .eq("category", assetCategory)
+          .not("item_name", "is", null)
+          .order("item_name", { ascending: true })
+          .order("id", { ascending: true })
+          .range(offset, offset + pageSize - 1);
+
+        if (type === "electronics") {
+          query = query.eq(
+            "electronics_subcategory",
+            electronicsType,
+          );
+        }
+
+        // Do not filter by availability: an out-of-stock
+        // registered item can still be requested.
+        const { data: catalogItems, error: catalogError } =
+          await query;
+
+        if (catalogError) {
+          return fail(
+            "Unable to verify registered item names. Please try again.",
+            500,
+          );
+        }
+
+        for (const item of catalogItems || []) {
+          const name =
+            typeof item.item_name === "string"
+              ? item.item_name.trim()
+              : "";
+
+          if (name && name.toLowerCase() === normalizedName) {
+            matchedName = name;
+            break;
+          }
+        }
+
+        if (matchedName || (catalogItems || []).length < pageSize) {
+          break;
+        }
+
+        offset += pageSize;
+      }
+
+      if (isEquipment && !matchedName) {
+        return fail(
+          "Select a registered item matching the chosen Tablet or PC type.",
+        );
+      }
+
+      // Other asset request types may still use custom names.
+      canonicalItemName =
+        matchedName || canonicalItemName.trim();
+    }
+
+    const title =
+      type === "electronics"
+        ? `${canonicalItemName} request`
+        : submittedTitle;
+
+    if (!title) {
+      return fail("Request title is required.");
+    }
+
+    const { data: newRequest, error: insertError } = await supabase
+      .from("requests")
+      .insert({
+        requester_id: user.id,
+        type,
+        title,
+        description: description || null,
+        quantity,
+        estimated_cost: estimatedCost,
+        asset_category: needsAssetDetails ? assetCategory : null,
+        item_name: needsAssetDetails ? canonicalItemName : null,
+        requested_item_name: isEquipment
+          ? canonicalItemName
+          : null,
+        electronics_subcategory:
+          type === "electronics" ? electronicsType : null,
+        justification: justification || null,
+        status: "pending_manager",
+      })
+      .select()
+      .single();
+
+    if (insertError || !newRequest) {
+      return fail(
+        insertError?.message || "Unable to create the request.",
+        500,
+      );
+    }
+
+    // Once the request exists, attachment failures must not
+    // return a request-creation failure and encourage duplicates.
+    const warnings: string[] = [];
+
+    const files = formData
+      .getAll("files")
+      .filter(
+        (entry): entry is File =>
+          typeof entry !== "string" && entry.size > 0,
+      );
+
+    for (const file of files) {
+      const safeName =
+        file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-150) ||
+        "attachment";
+
+      const filePath =
+        `requests/${newRequest.id}/${crypto.randomUUID()}-${safeName}`;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+
+        const { error: uploadError } = await supabase.storage
+          .from("attachments")
+          .upload(filePath, arrayBuffer, {
+            contentType: file.type || "application/octet-stream",
+          });
+
+        if (uploadError) {
+          warnings.push(`Could not upload "${file.name}".`);
+          continue;
+        }
+
+        const { error: attachmentError } = await supabase
+          .from("attachments")
+          .insert({
+            request_id: newRequest.id,
+            file_url: filePath,
+            uploaded_by: user.id,
+          });
+
+        if (attachmentError) {
+          warnings.push(`Could not attach "${file.name}".`);
+
+          // Best-effort cleanup of an upload without metadata.
+          try {
+            await supabase.storage
+              .from("attachments")
+              .remove([filePath]);
+          } catch {
+            // The saved request remains successful.
+          }
+        }
+      } catch {
+        warnings.push(`Could not process "${file.name}".`);
+      }
+    }
+
+    return NextResponse.json(
+      {
+        request: newRequest,
+        warnings,
+      },
+      { status: 201 },
+    );
+  } catch {
+    return fail(
+      "The submission could not be confirmed. Check My Requests before trying again.",
+      500,
+    );
+  }
 }
 
 export async function GET() {
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user) {
+      return fail("Unauthorized", 401);
+    }
+
+    const serviceClient = getServiceClient();
+    const requests: RequestRow[] = [];
+
+    const pageSize = 100;
+    let offset = 0;
+
+    while (true) {
+      // Service access is restricted to the authenticated user's
+      // own requests. It allows their approval comments to be
+      // included even when approval-table RLS is more restrictive.
+      const { data, error } = await serviceClient
+        .from("requests")
+        .select(`
+          *,
+          attachments(*),
+          approvals(
+            decision,
+            comment,
+            role_at_time,
+            created_at
+          ),
+          equipment_loans(
+            id,
+            asset_id,
+            borrowed_at,
+            return_requested_at,
+            returned_at,
+            return_condition,
+            asset:assets(
+              id,
+              asset_tag,
+              item_name
+            )
+          )
+        `)
+        .eq("requester_id", user.id)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+
+      if (error) {
+        return fail(
+          "Unable to load your requests and approval details.",
+          500,
+        );
+      }
+
+      const page = (data || []) as unknown as RequestRow[];
+      requests.push(...page);
+
+      if (page.length < pageSize) break;
+
+      offset += pageSize;
+    }
+
+    const result = requests.map((requestRow) => {
+      const approvals = [...(requestRow.approvals || [])].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() -
+          new Date(a.created_at).getTime(),
+      );
+
+      const rejection =
+        requestRow.status === "rejected"
+          ? approvals.find(
+              (approval) => approval.decision === "rejected",
+            )
+          : undefined;
+
+      const loans = [...(requestRow.equipment_loans || [])].sort(
+        (a, b) => {
+          // Preserve unknown historical dates.
+          if (!a.borrowed_at && !b.borrowed_at) return 0;
+          if (!a.borrowed_at) return 1;
+          if (!b.borrowed_at) return -1;
+
+          return (
+            new Date(a.borrowed_at).getTime() -
+            new Date(b.borrowed_at).getTime()
+          );
+        },
+      );
+
+      const equipmentLoans = loans.map((loan) => ({
+        ...loan,
+        status: loan.returned_at
+          ? "returned"
+          : loan.return_requested_at
+            ? "return_requested"
+            : "borrowed",
+      }));
+
+      return {
+        ...requestRow,
+        approvals,
+        rejection_reason:
+          rejection?.comment?.trim() || null,
+        rejected_by_role: rejection?.role_at_time || null,
+        equipment_loans: equipmentLoans,
+        borrowed_count: equipmentLoans.filter(
+          (loan) => loan.status !== "returned",
+        ).length,
+      };
+    });
+
+    return NextResponse.json(
+      { requests: result },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+        },
+      },
+    );
+  } catch {
+    return fail(
+      "Unable to load your requests. Please try again.",
+      500,
+    );
   }
-
-  const { data, error } = await supabase
-    .from("requests")
-    .select("*, attachments(*)")
-    .eq("requester_id", user.id)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-  const requestIds = (data || []).map((request) => request.id);
-  const { data: requestAssets, error: requestAssetsError } = requestIds.length
-    ? await serviceClient
-        .from("request_assets")
-        .select("id, request_id, fulfillment_mode, source, due_date, asset:assets(id, asset_tag, item_name, serial_number)")
-        .in("request_id", requestIds)
-    : { data: [], error: null };
-  if (requestAssetsError) {
-    return NextResponse.json({ error: requestAssetsError.message }, { status: 500 });
-  }
-
-  const assetsByRequest = new Map<string, RequestAssetRow[]>();
-  for (const requestAsset of (requestAssets || []) as RequestAssetRow[]) {
-    const linkedAssets = assetsByRequest.get(requestAsset.request_id) || [];
-    linkedAssets.push(requestAsset);
-    assetsByRequest.set(requestAsset.request_id, linkedAssets);
-  }
-
-  return NextResponse.json({
-    requests: (data || []).map((request) => ({
-      ...request,
-      request_assets: assetsByRequest.get(request.id) || [],
-    })),
-  });
 }

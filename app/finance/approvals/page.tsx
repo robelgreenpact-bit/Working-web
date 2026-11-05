@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Navbar from "@/app/components/Navbar";
 
 type Attachment = {
   id: string;
   file_url: string;
-  signed_url: string | null;
+  signed_url?: string | null;
 };
 
 type RequestRow = {
@@ -15,651 +16,1014 @@ type RequestRow = {
   title: string;
   description: string | null;
   quantity: number | null;
-  purchase_quantity: number;
   asset_category: string | null;
+  requested_item_name?: string | null;
   item_name: string | null;
   electronics_subcategory: string | null;
   estimated_cost: number;
   justification: string | null;
   created_at: string;
-  attachments: Attachment[];
+  attachments?: Attachment[];
   requester: { name: string; email: string } | null;
 };
 
 type HistoryRow = RequestRow & {
   status: string;
-  fulfillment_status: string;
-  request_assets: {
-    id: string;
-    fulfillment_mode: string;
-    source: string;
-    due_date: string | null;
-    asset: LoanChoice | null;
-  }[];
-  tax_registered: boolean;
-  tax_reference: string | null;
-  approvals: {
+  tax_registered?: boolean;
+  tax_reference?: string | null;
+  approvals?: {
     decision: string;
     comment: string | null;
     role_at_time: string;
     created_at: string;
-    approver: { name: string } | null;
+    approver?: { name: string } | null;
   }[];
 };
 
-type LoanChoice = {
+type AssetChoice = {
   id: string;
   asset_tag: string;
   item_name: string | null;
   category: string | null;
+  electronics_subcategory: string | null;
   serial_number: string | null;
   location: string | null;
-  electronics_subcategory?: string | null;
 };
 
-function daysAgo(dateStr: string) {
-  const days = Math.floor(
-    (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24),
+function normalize(value: string | null | undefined) {
+  return (value || "").trim().toLowerCase();
+}
+
+function itemName(request: RequestRow) {
+  return (
+    request.requested_item_name?.trim() ||
+    request.item_name?.trim() ||
+    ""
   );
-  if (days === 0) return "Today";
-  if (days === 1) return "1 day ago";
-  return `${days} days ago`;
 }
 
-function parsePerDiemDetails(description: string | null) {
-  if (!description) return [] as Array<{ label: string; value: string }>;
-
-  const lines = String(description)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => line.replace(/\*\*/g, ""))
-    .map((line) => line.replace(/^\*\s*/, ""))
-    .map((line) => line.replace(/^\*+/, ""))
-    .map((line) => line.replace(/\*+$/, ""));
-
-  const ignoredLines = new Set([
-    "Perdium Request",
-    "Per Diem Request",
-    "Date:",
-    "Title of Form: Field Allowance Evidence Form for Deploying Employees",
-    "Main Table (Employee Details)",
-    "Field Label (Left Column) | Field/Status (Right Column)",
-    "Approval and Signatures Table",
-    "Requester's Name & Signature | Reviewer's Name & Signature | Approver's Name & Signature",
-    "Report Section",
-    "Brief Report of the activities completed",
-    "--------------------------------",
-    "---",
-  ]);
-
-  return lines
-    .filter((line) => !ignoredLines.has(line))
-    .map((line) => {
-      if (line.includes("|")) {
-        const [left, right] = line.split("|");
-        return { label: left.trim(), value: right?.trim() || "" };
-      }
-      const parts = line.split(":");
-      if (parts.length >= 2) {
-        return { label: parts[0].trim(), value: parts.slice(1).join(":").trim() };
-      }
-      return { label: line, value: "" };
-    })
-    .filter((item) => item.label && item.value);
+function isEquipment(request: RequestRow) {
+  return (
+    request.type === "electronics" &&
+    ["tablet", "pc"].includes(request.electronics_subcategory || "")
+  );
 }
 
-const handleDownload = (requestId: string) => {
-  window.open(`/api/requests/${requestId}/download`, "_blank");
-};
+function hasUnknownElectronicsType(request: RequestRow) {
+  return (
+    request.type === "electronics" &&
+    !["tablet", "pc", "other"].includes(
+      request.electronics_subcategory || "",
+    )
+  );
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Unknown date"
+    : date.toLocaleDateString();
+}
+
+function matchingAssets(
+  request: RequestRow,
+  assets: AssetChoice[],
+) {
+  const name = normalize(itemName(request));
+
+  if (!isEquipment(request) || !name) return [];
+
+  return assets.filter(
+    (asset) =>
+      asset.category === "electronics" &&
+      asset.electronics_subcategory ===
+        request.electronics_subcategory &&
+      normalize(asset.item_name) === name,
+  );
+}
+
+async function readResponse(response: Response) {
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      typeof data?.error === "string"
+        ? data.error
+        : `Request failed (${response.status}).`,
+    );
+  }
+
+  if (!data || typeof data !== "object") {
+    throw new Error("The server returned an invalid response.");
+  }
+
+  return data;
+}
+
+function RequestDetails({ request }: { request: RequestRow }) {
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="flex flex-wrap gap-x-6 gap-y-2 text-gray-700">
+        {itemName(request) && (
+          <span>
+            <strong>Item:</strong> {itemName(request)}
+          </span>
+        )}
+
+        {request.electronics_subcategory && (
+          <span>
+            <strong>Type:</strong>{" "}
+            {request.electronics_subcategory.toUpperCase()}
+          </span>
+        )}
+
+        {request.quantity !== null && (
+          <span>
+            <strong>Quantity:</strong> {request.quantity}
+          </span>
+        )}
+
+        {!isEquipment(request) && request.estimated_cost > 0 && (
+          <span>
+            <strong>Estimated cost:</strong>{" "}
+            {Number(request.estimated_cost).toLocaleString()} ETB
+          </span>
+        )}
+      </div>
+
+      {request.justification && (
+        <div className="rounded-lg bg-blue-50 p-3 text-gray-800">
+          <p className="font-medium">Justification</p>
+          <p className="mt-1 whitespace-pre-wrap">
+            {request.justification}
+          </p>
+        </div>
+      )}
+
+      {request.description && (
+        <div className="rounded-lg bg-gray-50 p-3">
+          <p className="mb-1 font-medium">
+            {request.type === "per_diem"
+              ? "Per diem details"
+              : "Description"}
+          </p>
+          <p className="whitespace-pre-wrap break-words text-gray-700">
+            {request.type === "per_diem"
+              ? request.description.replace(/\*\*/g, "")
+              : request.description}
+          </p>
+        </div>
+      )}
+
+      {!!request.attachments?.length && (
+        <div>
+          <p className="mb-1 font-medium">Attachments</p>
+          <ul className="space-y-1">
+            {request.attachments.map((attachment) => (
+              <li key={attachment.id}>
+                {attachment.signed_url ? (
+                  <a
+                    href={attachment.signed_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="break-all text-brand-deep underline"
+                  >
+                    {attachment.file_url.split("/").pop() ||
+                      "Attachment"}
+                  </a>
+                ) : (
+                  <span className="text-gray-500">
+                    {attachment.file_url.split("/").pop() ||
+                      "Attachment"}{" "}
+                    — preview unavailable
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {request.type === "per_diem" && (
+        <a
+          href={`/api/requests/${request.id}/download`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block rounded bg-amber-600 px-3 py-2 font-medium text-white"
+        >
+          Download PDF
+        </a>
+      )}
+    </div>
+  );
+}
 
 export default function FinancePage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
-  const [purchaseAssets, setPurchaseAssets] = useState<LoanChoice[]>([]);
-  const [purchaseSelections, setPurchaseSelections] = useState<Record<string, string[]>>({});
-  const [purchaseSearches, setPurchaseSearches] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<HistoryRow[]>([]);
-  const [arrivalSerials, setArrivalSerials] = useState<Record<string, string[]>>({});
-  const [receivingRequest, setReceivingRequest] = useState<string | null>(null);
+  const [assets, setAssets] = useState<AssetChoice[]>([]);
+
+  const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>(
+  const [assetsLoading, setAssetsLoading] = useState(true);
+
+  const [requestsError, setRequestsError] = useState("");
+  const [historyError, setHistoryError] = useState("");
+  const [assetsError, setAssetsError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const [selections, setSelections] = useState<
+    Record<string, string[]>
+  >({});
+  const [searches, setSearches] = useState<Record<string, string>>({});
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [taxChoices, setTaxChoices] = useState<Record<string, boolean>>(
     {},
   );
+
   const [processing, setProcessing] = useState<string | null>(null);
-  const [taxRegistryChoice, setTaxRegistryChoice] = useState<
-    Record<string, boolean>
-  >({});
-
-  const loadData = async () => {
-    const res = await fetch("/api/finance/requests");
-    const data = await res.json();
-    const nextRequests: RequestRow[] = data.requests || [];
-    setRequests(nextRequests);
-    setPurchaseSelections((current) => {
-      const next = { ...current };
-      for (const request of nextRequests) {
-        if (["electronics", "physical_good", "other_asset"].includes(request.type) && !next[request.id]) {
-          next[request.id] = Array(Math.max(1, request.quantity || 1)).fill("");
-        }
-      }
-      return next;
-    });
-    setLoading(false);
-  };
-
-  const loadHistory = async () => {
-    setHistoryLoading(true);
-    const res = await fetch("/api/finance/history");
-    const data = await res.json();
-    const nextHistory: HistoryRow[] = data.requests || [];
-    setHistory(nextHistory);
-    setArrivalSerials((current) => {
-      const next = { ...current };
-      for (const request of nextHistory) {
-        const receivedCount = request.request_assets.filter((asset) => asset.source === "purchase").length;
-        const remainingCount = Math.max(0, request.purchase_quantity - receivedCount);
-        if (!next[request.id] || next[request.id].length !== remainingCount) {
-          next[request.id] = Array(remainingCount).fill("");
-        }
-      }
-      return next;
-    });
-    setHistoryLoading(false);
-  };
-
-  const registerArrivedAssets = async (request: HistoryRow) => {
-    const serialNumbers = (arrivalSerials[request.id] || []).map((serial) => serial.trim()).filter(Boolean);
-    if (!serialNumbers.length) {
-      alert("Enter at least one received unit's serial number.");
-      return;
-    }
-
-    setReceivingRequest(request.id);
-    const res = await fetch(`/api/finance/requests/${request.id}/receive-assets`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serial_numbers: serialNumbers }),
-    });
-    const data = await res.json();
-    setReceivingRequest(null);
-    if (!res.ok) {
-      alert(data.error || "Failed to register received assets");
-      return;
-    }
-    const createdLabels = (data.assets || []).map(
-      (asset: { asset_tag: string; serial_number: string }) => `${asset.asset_tag} (SN ${asset.serial_number})`,
-    );
-    alert(`Registered and assigned: ${createdLabels.join(", ")}`);
-    loadHistory();
-  };
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const submitting = useRef(false);
 
   useEffect(() => {
-    fetch("/api/finance/requests")
-      .then((res) => res.json())
-      .then((data) => {
-        const nextRequests: RequestRow[] = data.requests || [];
-        setRequests(nextRequests);
-        setPurchaseSelections(
-          Object.fromEntries(
-            nextRequests
-              .filter((request) => ["electronics", "physical_good", "other_asset"].includes(request.type))
-              .map((request) => [request.id, Array(Math.max(1, request.quantity || 1)).fill("")]),
-          ),
-        );
-        setLoading(false);
-      });
-    fetch("/api/finance/history")
-      .then((res) => res.json())
-      .then((data) => {
-        const nextHistory: HistoryRow[] = data.requests || [];
-        setHistory(nextHistory);
-        setArrivalSerials(
-          Object.fromEntries(
-            nextHistory.map((request) => {
-              const receivedCount = request.request_assets.filter((asset) => asset.source === "purchase").length;
-              return [request.id, Array(Math.max(0, request.purchase_quantity - receivedCount)).fill("")];
-            }),
-          ),
-        );
-        setHistoryLoading(false);
-      });
-    fetch("/api/assets/available")
-      .then((res) => res.json())
-      .then((data) => setPurchaseAssets(data.assets || []))
-      .catch(() => setPurchaseAssets([]));
-  }, []);
+    const controller = new AbortController();
+    let active = true;
 
-  const handleDecision = async (
-    id: string,
-    decision: "approved" | "rejected",
-  ) => {
-    const requestRow = requests.find((request) => request.id === id);
-    const isElectronics = requestRow?.type === "electronics";
-    const selections = purchaseSelections[id] || [];
-    if (decision === "approved" && isElectronics) {
-      const expectedQuantity = Math.max(1, requestRow?.quantity || 1);
-      if (selections.length !== expectedQuantity || selections.some((selection) => !selection)) {
-        alert("Select one available inventory unit for every requested tablet or PC.");
-        return;
-      }
-      if (new Set(selections).size !== selections.length) {
-        alert("Select a different inventory unit for each requested item.");
-        return;
+    setLoading(true);
+    setHistoryLoading(true);
+    setAssetsLoading(true);
+    setRequestsError("");
+    setHistoryError("");
+    setAssetsError("");
+    setSelections({});
+
+    async function loadRequests() {
+      try {
+        const response = await fetch("/api/finance/requests", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await readResponse(response);
+
+        if (!Array.isArray(data.requests)) {
+          throw new Error("Invalid pending requests response.");
+        }
+
+        if (active) setRequests(data.requests);
+      } catch (error) {
+        if (active) {
+          setRequests([]);
+          setRequestsError(
+            error instanceof Error
+              ? error.message
+              : "Could not load pending requests.",
+          );
+        }
+      } finally {
+        if (active) setLoading(false);
       }
     }
 
-    setProcessing(id);
-    const res = await fetch(`/api/finance/requests/${id}/decide`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        decision,
-        comment: commentDrafts[id] || "",
-        forTaxRegistry: taxRegistryChoice[id] || false,
-        assetIds: isElectronics && decision === "approved" ? selections : [],
-        fulfillmentMode: isElectronics ? "lend" : "assign",
-        purchaseQuantity: requestRow && ["physical_good", "other_asset"].includes(requestRow.type)
-          ? Math.max(1, requestRow.quantity || 1)
-          : 0,
-        dueDate: null,
-      }),
+    async function loadHistory() {
+      try {
+        const response = await fetch("/api/finance/history", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await readResponse(response);
+
+        if (!Array.isArray(data.requests)) {
+          throw new Error("Invalid history response.");
+        }
+
+        if (active) setHistory(data.requests);
+      } catch (error) {
+        if (active) {
+          setHistory([]);
+          setHistoryError(
+            error instanceof Error
+              ? error.message
+              : "Could not load history.",
+          );
+        }
+      } finally {
+        if (active) setHistoryLoading(false);
+      }
+    }
+
+    async function loadAssets() {
+      try {
+        const response = await fetch("/api/assets/available", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await readResponse(response);
+
+        if (!Array.isArray(data.assets)) {
+          throw new Error("Invalid inventory response.");
+        }
+
+        const sortedAssets: AssetChoice[] = [...data.assets];
+        sortedAssets.sort((a, b) =>
+          a.asset_tag.localeCompare(b.asset_tag, undefined, {
+            numeric: true,
+          }),
+        );
+
+        if (active) setAssets(sortedAssets);
+      } catch (error) {
+        if (active) {
+          setAssets([]);
+          setAssetsError(
+            error instanceof Error
+              ? error.message
+              : "Could not load available devices.",
+          );
+        }
+      } finally {
+        if (active) setAssetsLoading(false);
+      }
+    }
+
+    void Promise.allSettled([
+      loadRequests(),
+      loadHistory(),
+      loadAssets(),
+    ]);
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [refreshVersion]);
+
+  function refresh() {
+    setLoading(true);
+    setAssetsLoading(true);
+    setHistoryLoading(true);
+    setSelections({});
+    setRefreshVersion((value) => value + 1);
+  }
+
+  function toggleAsset(
+    requestId: string,
+    assetId: string,
+    quantity: number,
+  ) {
+    setSelections((current) => {
+      const selected = current[requestId] || [];
+
+      if (selected.includes(assetId)) {
+        return {
+          ...current,
+          [requestId]: selected.filter((id) => id !== assetId),
+        };
+      }
+
+      if (selected.length >= quantity) return current;
+
+      return {
+        ...current,
+        [requestId]: [...selected, assetId],
+      };
     });
+  }
 
-    const data = await res.json();
-    setProcessing(null);
+  async function handleDecision(
+    request: RequestRow,
+    decision: "approved" | "rejected",
+  ) {
+    if (submitting.current || loading) return;
 
-    if (!res.ok) {
-      const errorMessage = data.error || "Failed to submit decision";
-      alert(/no longer match|unavailable|just assigned|refresh the list/i.test(errorMessage)
-        ? "One or more selected units were just taken. Refresh the approvals list and choose another unit."
-        : errorMessage);
+    setActionError("");
+    setNotice("");
+
+    const comment = (comments[request.id] || "").trim();
+    const equipment = isEquipment(request);
+    const selected = selections[request.id] || [];
+
+    if (decision === "rejected" && !comment) {
+      setActionError("Enter a rejection reason for the worker.");
       return;
     }
 
-    if (data.warning) {
-      alert(data.warning);
+    if (decision === "approved") {
+      if (hasUnknownElectronicsType(request)) {
+        setActionError(
+          "This electronics request has no valid equipment type. Correct the request before approving it.",
+        );
+        return;
+      }
+
+      if (equipment) {
+        const quantity = Number(request.quantity);
+        const candidates = matchingAssets(request, assets);
+        const availableIds = new Set(
+          candidates.map((asset) => asset.id),
+        );
+
+        if (
+          assetsLoading ||
+          assetsError ||
+          !itemName(request) ||
+          !Number.isSafeInteger(quantity) ||
+          quantity < 1 ||
+          candidates.length < quantity ||
+          selected.length !== quantity ||
+          new Set(selected).size !== quantity ||
+          selected.some((id) => !availableIds.has(id))
+        ) {
+          setActionError(
+            "Select exactly the requested number of matching available devices before approving.",
+          );
+          return;
+        }
+      }
     }
 
-    loadData();
-    loadHistory();
-  };
+    submitting.current = true;
+    setProcessing(request.id);
 
-  const compatibleAssets = (request: RequestRow) => {
-    const hasDistinctItemName = Boolean(request.item_name && request.item_name !== request.title);
-    return purchaseAssets.filter((asset) =>
-      asset.category === (request.asset_category || (request.type === "electronics" ? "electronics" : "other")) &&
-      (!hasDistinctItemName || asset.item_name === request.item_name) &&
-      (request.type !== "electronics" || (
-        (!request.electronics_subcategory || asset.electronics_subcategory === request.electronics_subcategory) &&
-        Boolean(asset.serial_number?.trim())
-      )),
-    );
-  };
+    try {
+      const response = await fetch(
+        `/api/finance/requests/${request.id}/decide`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision,
+            comment,
+            assetIds:
+              equipment && decision === "approved" ? selected : [],
+            forTaxRegistry: equipment
+              ? false
+              : Boolean(taxChoices[request.id]),
+          }),
+        },
+      );
+
+      const data = await readResponse(response);
+
+      setRequests((current) =>
+        current.filter((row) => row.id !== request.id),
+      );
+
+      const message =
+        decision === "rejected"
+          ? "Request rejected. The worker can see your reason."
+          : equipment
+            ? "Request approved. The selected devices are now borrowed by the worker."
+            : "Request approved.";
+
+      setNotice(
+        typeof data.warning === "string"
+          ? `${message} ${data.warning}`
+          : message,
+      );
+
+      refresh();
+    } catch (error) {
+      setActionError(
+        `${
+          error instanceof Error
+            ? error.message
+            : "Could not confirm the decision."
+        } The lists are being refreshed. Check the request status before trying again.`,
+      );
+
+      // A failed response can occur after a successful server commit.
+      // Reload both requests and inventory before allowing another action.
+      refresh();
+    } finally {
+      submitting.current = false;
+      setProcessing(null);
+    }
+  }
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50">
       <Navbar title="Approvals" />
-      <div className="mx-auto max-w-4xl p-8">
-        <h1 className="mb-6 text-2xl font-bold text-brand-deep">
-          Pending Final Approval
-        </h1>
 
-        {loading ? (
-          <p className="text-gray-500">Loading...</p>
-        ) : requests.length === 0 ? (
-          <div className="rounded-lg border-l-4 border-brand bg-white p-6 text-gray-500 shadow">
-            No requests waiting for your approval.
+      <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-8">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-brand-deep">
+              Finance approvals
+            </h1>
+            <p className="mt-1 text-sm text-gray-600">
+              Review approved requests and assign available devices.
+            </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {requests.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border-l-4 border-brand bg-white p-6 shadow"
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">{r.title}</h2>
-                    <p className="text-sm text-gray-500">
-                      From {r.requester?.name || "Unknown"} (
-                      {r.requester?.email}) — {(r.type || "").replace("_", " ")}
-                    </p>
-                  </div>
-                  <span className="text-xs text-gray-400">
-                    Submitted {daysAgo(r.created_at)}
-                  </span>
-                </div>
 
-                {r.type === "per_diem" ? (
-                  <div className="mb-3 rounded border border-amber-100 bg-amber-50 p-3">
-                    <p className="mb-2 text-sm font-semibold text-amber-800">
-                      Per Diem Details
-                    </p>
-                    <div className="grid gap-2 text-sm text-gray-700 sm:grid-cols-2">
-                      {parsePerDiemDetails(r.description).map((item, index) => (
-                        <div key={`${item.label}-${index}`}>
-                          <span className="font-medium text-gray-900">
-                            {item.label}:
-                          </span>{" "}
-                          {item.value}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  r.description && (
-                    <p className="mb-2 text-sm text-gray-700">{r.description}</p>
-                  )
-                )}
-
-                <div className="mb-2 flex gap-6 text-sm text-gray-700">
-                  {r.quantity !== null && <span>Qty: {r.quantity}</span>}
-                  {r.estimated_cost > 0 && (
-                    <span>Cost: {r.estimated_cost} ETB</span>
-                  )}
-                </div>
-
-                {r.justification && (
-                  <p className="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-gray-700">
-                    Justification: {r.justification}
-                  </p>
-                )}
-
-                {r.type === "electronics" && (
-                  <section className="mb-4 rounded border border-gray-200 bg-gray-50 p-4">
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-semibold text-gray-900">Assign requested units</h3>
-                        <p className="text-sm text-gray-600">
-                          {r.item_name || r.title}
-                          {r.electronics_subcategory ? ` · ${r.electronics_subcategory.toUpperCase()}` : ""}
-                          {` · Quantity ${Math.max(1, r.quantity || 1)}`}
-                        </p>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {compatibleAssets(r).length} matching units available
-                      </span>
-                    </div>
-                    <div className="space-y-3">
-                      {Array.from({ length: Math.max(1, r.quantity || 1) }, (_, unitIndex) => {
-                        const searchKey = `${r.id}-${unitIndex}`;
-                        const searchTerm = (purchaseSearches[searchKey] || "").trim().toLowerCase();
-                        const selected = purchaseSelections[r.id]?.[unitIndex] || "";
-                        const candidates = compatibleAssets(r).filter((asset) =>
-                          !searchTerm || [asset.asset_tag, asset.serial_number, asset.item_name]
-                            .some((value) => value?.toLowerCase().includes(searchTerm)),
-                        );
-                        return (
-                          <div key={searchKey} className="grid gap-2 sm:grid-cols-[5rem_1fr_2fr] sm:items-center">
-                            <span className="text-sm font-medium text-gray-700">Unit {unitIndex + 1}</span>
-                            <input
-                              type="search"
-                              value={purchaseSearches[searchKey] || ""}
-                              onChange={(e) => setPurchaseSearches({ ...purchaseSearches, [searchKey]: e.target.value })}
-                              placeholder="Scan/type serial"
-                              aria-label={`Search serial number for unit ${unitIndex + 1}`}
-                              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                            />
-                            <select
-                              value={selected}
-                              onChange={(e) => {
-                                const next = [...(purchaseSelections[r.id] || [])];
-                                next[unitIndex] = e.target.value;
-                                setPurchaseSelections({ ...purchaseSelections, [r.id]: next });
-                              }}
-                              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                            >
-                              <option value="">Select available unit</option>
-                              {candidates.map((asset) => (
-                                <option
-                                  key={asset.id}
-                                  value={asset.id}
-                                  disabled={(purchaseSelections[r.id] || []).some(
-                                    (assetId, index) => assetId === asset.id && index !== unitIndex,
-                                  )}
-                                >
-                                  {asset.asset_tag}{asset.serial_number ? ` · SN ${asset.serial_number}` : ""}
-                                  {asset.location ? ` · ${asset.location}` : ""}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <p className="mt-3 text-xs text-gray-500">
-                      Selected electronics are lent to the requester. Admin confirms handover; the worker requests return later.
-                    </p>
-                  </section>
-                )}
-
-                {r.attachments && r.attachments.length > 0 && (
-                  <div className="mb-3">
-                    <p className="mb-1 text-xs font-medium text-gray-500">
-                      Attachments:
-                    </p>
-                    <ul className="text-sm">
-                      {r.attachments.map((a) => (
-                        <li key={a.id}>
-                          {a.signed_url ? (
-                            <a
-                              href={a.signed_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-deep hover:underline"
-                            >
-                              {a.file_url.split("/").pop()}
-                            </a>
-                          ) : (
-                            <span className="text-gray-400">
-                              {a.file_url.split("/").pop()} (unavailable)
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="mb-3 flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id={`tax-registry-${r.id}`}
-                    checked={taxRegistryChoice[r.id] || false}
-                    onChange={(e) =>
-                      setTaxRegistryChoice({
-                        ...taxRegistryChoice,
-                        [r.id]: e.target.checked,
-                      })
-                    }
-                    className="h-4 w-4 rounded border-gray-300 text-brand-deep focus:ring-brand-deep"
-                  />
-                  <label
-                    htmlFor={`tax-registry-${r.id}`}
-                    className="text-sm font-medium text-gray-700"
-                  >
-                    Send to Tax Registry
-                  </label>
-                </div>
-
-                <textarea
-                  placeholder="Optional comment..."
-                  value={commentDrafts[r.id] || ""}
-                  onChange={(e) =>
-                    setCommentDrafts({
-                      ...commentDrafts,
-                      [r.id]: e.target.value,
-                    })
-                  }
-                  rows={2}
-                  className="mb-3 w-full rounded border border-gray-300 p-2 text-sm text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
-                />
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => handleDecision(r.id, "approved")}
-                    disabled={processing === r.id || (
-                      r.type === "electronics" &&
-                      ((purchaseSelections[r.id] || []).length !== Math.max(1, r.quantity || 1) ||
-                        (purchaseSelections[r.id] || []).some((selection) => !selection) ||
-                        new Set(purchaseSelections[r.id] || []).size !== Math.max(1, r.quantity || 1))
-                    )}
-                    className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => handleDecision(r.id, "rejected")}
-                    disabled={processing === r.id}
-                    className="rounded bg-red-600 px-4 py-2 text-sm font-white hover:bg-red-700 disabled:opacity-50"
-                  >
-                    Reject
-                  </button>
-                  {r.type === "per_diem" && (
-                    <button
-                      onClick={() => handleDownload(r.id)}
-                      className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700"
-                    >
-                      Download PDF
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-wrap gap-3 text-sm">
+            <Link
+              href="/assets/borrowed"
+              className="rounded border bg-white px-3 py-2 text-brand-deep"
+            >
+              Borrowed items
+            </Link>
+            <Link
+              href="/assets/inventory"
+              className="rounded border bg-white px-3 py-2 text-brand-deep"
+            >
+              Inventory
+            </Link>
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={
+                processing !== null ||
+                loading ||
+                assetsLoading ||
+                historyLoading
+              }
+              className="rounded border bg-white px-3 py-2 disabled:opacity-50"
+            >
+              Refresh
+            </button>
           </div>
+        </header>
+
+        {notice && (
+          <p
+            role="status"
+            className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+          >
+            {notice}
+          </p>
         )}
 
-        <h2 className="mb-4 mt-10 text-xl font-bold text-brand-deep">
-          History
-        </h2>
+        {actionError && (
+          <p
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          >
+            {actionError}
+          </p>
+        )}
 
-        {historyLoading ? (
-          <p className="text-gray-500">Loading...</p>
-        ) : history.length === 0 ? (
-          <div className="rounded-lg border-l-4 border-brand bg-white p-6 text-gray-500 shadow">
-            No history yet.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {history.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border-l-4 border-brand bg-white p-4 shadow"
-              >
-                <div className="flex items-start justify-between">
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold text-gray-900">
+            Pending final approval
+          </h2>
+
+          {loading ? (
+            <p className="text-gray-500">Loading requests…</p>
+          ) : requestsError ? (
+            <p role="alert" className="rounded bg-red-50 p-4 text-red-700">
+              {requestsError}
+            </p>
+          ) : requests.length === 0 ? (
+            <p className="rounded-lg border bg-white p-6 text-gray-500">
+              No requests waiting for finance approval.
+            </p>
+          ) : (
+            requests.map((request) => {
+              const equipment = isEquipment(request);
+              const quantity = Number(request.quantity);
+              const validQuantity =
+                Number.isSafeInteger(quantity) && quantity > 0;
+              const candidates = matchingAssets(request, assets);
+              const selected = selections[request.id] || [];
+              const candidateIds = new Set(
+                candidates.map((asset) => asset.id),
+              );
+
+              const search = normalize(searches[request.id]);
+              const visibleAssets = candidates.filter(
+                (asset) =>
+                  !search ||
+                  [
+                    asset.asset_tag,
+                    asset.serial_number,
+                    asset.location,
+                    asset.item_name,
+                  ].some((value) => normalize(value).includes(search)),
+              );
+
+              const selectionValid =
+                validQuantity &&
+                selected.length === quantity &&
+                new Set(selected).size === quantity &&
+                selected.every((id) => candidateIds.has(id));
+
+              const insufficientStock =
+                validQuantity && candidates.length < quantity;
+
+              const canApprove =
+                processing === null &&
+                !hasUnknownElectronicsType(request) &&
+                (!equipment ||
+                  (!assetsLoading &&
+                    !assetsError &&
+                    Boolean(itemName(request)) &&
+                    !insufficientStock &&
+                    selectionValid));
+
+              return (
+                <article
+                  key={request.id}
+                  className="space-y-4 rounded-xl border bg-white p-4 shadow-sm sm:p-6"
+                >
+                  <div className="flex flex-wrap justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {request.title}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        {request.requester?.name || "Unknown worker"}
+                        {request.requester?.email
+                          ? ` · ${request.requester.email}`
+                          : ""}
+                      </p>
+                      <p className="mt-1 text-xs capitalize text-gray-500">
+                        {request.type.replaceAll("_", " ")}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Submitted {formatDate(request.created_at)}
+                    </p>
+                  </div>
+
+                  <RequestDetails request={request} />
+
+                  {hasUnknownElectronicsType(request) && (
+                    <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">
+                      This older request has no valid equipment type.
+                      Correct its type before approving, or reject it
+                      with a reason.
+                    </p>
+                  )}
+
+                  {equipment && (
+                    <section className="space-y-3 rounded-lg border bg-gray-50 p-4">
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <div>
+                          <h4 className="font-semibold text-gray-900">
+                            Select devices from inventory
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            {itemName(request) || "Item name missing"}
+                            {" · "}
+                            {request.electronics_subcategory?.toUpperCase()}
+                          </p>
+                        </div>
+                        <p className="text-sm font-medium text-brand-deep">
+                          {selected.length} /{" "}
+                          {validQuantity ? quantity : "?"} selected
+                        </p>
+                      </div>
+
+                      {!validQuantity || !itemName(request) ? (
+                        <p className="text-sm text-red-700">
+                          The request needs a valid item name and
+                          positive whole-number quantity before approval.
+                        </p>
+                      ) : assetsLoading ? (
+                        <p className="text-sm text-gray-500">
+                          Loading available devices…
+                        </p>
+                      ) : assetsError ? (
+                        <p role="alert" className="text-sm text-red-700">
+                          {assetsError} Use Refresh to try again.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-600">
+                            {candidates.length} matching devices available.
+                          </p>
+
+                          {insufficientStock && (
+                            <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                              Not enough stock: requested {quantity},
+                              available {candidates.length}. Leave this
+                              request pending, or reject it with a reason.
+                            </p>
+                          )}
+
+                          <input
+                            type="search"
+                            value={searches[request.id] || ""}
+                            onChange={(event) =>
+                              setSearches((current) => ({
+                                ...current,
+                                [request.id]: event.target.value,
+                              }))
+                            }
+                            placeholder="Search asset code, serial or location"
+                            aria-label={`Search available devices for ${request.title}`}
+                            className="w-full rounded border bg-white px-3 py-2 text-sm text-gray-900"
+                          />
+
+                          <div className="max-h-80 overflow-auto rounded border bg-white">
+                            <table className="w-full text-left text-sm">
+                              <thead className="sticky top-0 bg-gray-100 text-gray-700">
+                                <tr>
+                                  <th className="p-3">Select</th>
+                                  <th className="p-3">Asset code</th>
+                                  <th className="p-3">Serial number</th>
+                                  <th className="p-3">Location</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {visibleAssets.map((asset) => {
+                                  const checked = selected.includes(asset.id);
+
+                                  return (
+                                    <tr
+                                      key={asset.id}
+                                      className={
+                                        checked
+                                          ? "border-t bg-blue-50"
+                                          : "border-t"
+                                      }
+                                    >
+                                      <td className="p-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          disabled={
+                                            processing !== null ||
+                                            insufficientStock ||
+                                            (!checked &&
+                                              selected.length >= quantity)
+                                          }
+                                          onChange={() =>
+                                            toggleAsset(
+                                              request.id,
+                                              asset.id,
+                                              quantity,
+                                            )
+                                          }
+                                          aria-label={`Select ${asset.asset_tag}`}
+                                          className="h-4 w-4"
+                                        />
+                                      </td>
+                                      <td className="p-3 font-medium">
+                                        {asset.asset_tag}
+                                      </td>
+                                      <td className="p-3">
+                                        {asset.serial_number || "—"}
+                                      </td>
+                                      <td className="p-3">
+                                        {asset.location || "—"}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+
+                                {visibleAssets.length === 0 && (
+                                  <tr>
+                                    <td
+                                      colSpan={4}
+                                      className="p-4 text-center text-gray-500"
+                                    >
+                                      {candidates.length === 0
+                                        ? "No matching devices available."
+                                        : "No devices match your search."}
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {selected.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="font-medium">Selected:</span>
+                              {candidates
+                                .filter((asset) =>
+                                  selected.includes(asset.id),
+                                )
+                                .map((asset) => (
+                                  <span
+                                    key={asset.id}
+                                    className="rounded bg-blue-100 px-2 py-1 text-blue-900"
+                                  >
+                                    {asset.asset_tag}
+                                  </span>
+                                ))}
+                              <button
+                                type="button"
+                                disabled={processing !== null}
+                                onClick={() =>
+                                  setSelections((current) => ({
+                                    ...current,
+                                    [request.id]: [],
+                                  }))
+                                }
+                                className="underline disabled:opacity-50"
+                              >
+                                Clear selection
+                              </button>
+                            </div>
+                          )}
+
+                          <p className="text-xs text-gray-600">
+                            Approval immediately records these devices as
+                            borrowed by{" "}
+                            {request.requester?.name || "the worker"}.
+                            There is no due date. Availability is checked
+                            again when the approval is saved.
+                          </p>
+                        </>
+                      )}
+                    </section>
+                  )}
+
+                  {!equipment &&
+                    !hasUnknownElectronicsType(request) && (
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(taxChoices[request.id])}
+                          disabled={processing !== null}
+                          onChange={(event) =>
+                            setTaxChoices((current) => ({
+                              ...current,
+                              [request.id]: event.target.checked,
+                            }))
+                          }
+                          className="h-4 w-4"
+                        />
+                        Send to Tax Registry
+                      </label>
+                    )}
+
                   <div>
-                    <p className="font-medium">{r.title}</p>
+                    <label
+                      htmlFor={`comment-${request.id}`}
+                      className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                      Comment / rejection reason
+                    </label>
+                    <textarea
+                      id={`comment-${request.id}`}
+                      value={comments[request.id] || ""}
+                      disabled={processing !== null}
+                      onChange={(event) =>
+                        setComments((current) => ({
+                          ...current,
+                          [request.id]: event.target.value,
+                        }))
+                      }
+                      placeholder="Required when rejecting; visible to the worker."
+                      rows={3}
+                      className="w-full rounded border p-3 text-sm text-gray-900"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleDecision(request, "approved")
+                      }
+                      disabled={!canApprove}
+                      className="rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {processing === request.id
+                        ? "Saving…"
+                        : equipment
+                          ? "Approve and assign devices"
+                          : "Approve"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleDecision(request, "rejected")
+                      }
+                      disabled={
+                        processing !== null ||
+                        !(comments[request.id] || "").trim()
+                      }
+                      className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+
+                    <span className="text-xs text-gray-500">
+                      To leave pending, take no action.
+                    </span>
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </section>
+
+        <section className="space-y-4 border-t pt-6">
+          <h2 className="text-xl font-semibold text-gray-900">
+            Decision history
+          </h2>
+
+          {historyLoading ? (
+            <p className="text-gray-500">Loading history…</p>
+          ) : historyError ? (
+            <p role="alert" className="rounded bg-red-50 p-4 text-red-700">
+              {historyError}
+            </p>
+          ) : history.length === 0 ? (
+            <p className="rounded-lg border bg-white p-6 text-gray-500">
+              No history yet.
+            </p>
+          ) : (
+            history.map((request) => (
+              <article
+                key={request.id}
+                className="space-y-3 rounded-xl border bg-white p-4"
+              >
+                <div className="flex flex-wrap justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">{request.title}</h3>
                     <p className="text-sm text-gray-500">
-                      From {r.requester?.name || "Unknown"} —{" "}
-                      {(r.type || "").replace("_", " ")}
+                      {request.requester?.name || "Unknown worker"}
+                      {" · "}
+                      {formatDate(request.created_at)}
                     </p>
                   </div>
                   <span
-                    className={`rounded px-2 py-1 text-xs ${
-                      r.status === "rejected"
+                    className={`self-start rounded px-2 py-1 text-xs capitalize ${
+                      request.status === "rejected"
                         ? "bg-red-100 text-red-800"
-                        : r.status === "approved"
+                        : request.status === "approved"
                           ? "bg-green-100 text-green-800"
                           : "bg-blue-100 text-blue-800"
                     }`}
                   >
-                    {(r.status || "").replace("_", " ")}
+                    {request.status.replaceAll("_", " ")}
                   </span>
                 </div>
 
-                {r.fulfillment_status && r.fulfillment_status !== "not_applicable" && (
-                  <p className="mt-2 text-sm font-medium capitalize text-gray-700">
-                    Fulfillment: {r.fulfillment_status.replaceAll("_", " ")}
-                  </p>
-                )}
-
-                {r.status === "approved" && r.purchase_quantity > 0 && (
-                  (() => {
-                    const receivedCount = (r.request_assets || []).filter((asset) => asset.source === "purchase").length;
-                    const remainingCount = Math.max(0, r.purchase_quantity - receivedCount);
-                    if (remainingCount === 0) return null;
-                    return (
-                      <section className="mt-3 rounded border border-amber-200 bg-amber-50 p-3">
-                        <p className="mb-2 text-sm font-medium text-amber-900">
-                          Register arrived units ({remainingCount} remaining)
-                        </p>
-                        <div className="space-y-2">
-                          {Array.from({ length: remainingCount }, (_, index) => (
-                            <input
-                              key={`${r.id}-arrival-${index}`}
-                              type="text"
-                              value={arrivalSerials[r.id]?.[index] || ""}
-                              onChange={(e) => {
-                                const next = [...(arrivalSerials[r.id] || Array(remainingCount).fill(""))];
-                                next[index] = e.target.value;
-                                setArrivalSerials({ ...arrivalSerials, [r.id]: next });
-                              }}
-                              placeholder={`Serial number for received unit ${index + 1}`}
-                              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                            />
-                          ))}
-                        </div>
-                        <button
-                          onClick={() => registerArrivedAssets(r)}
-                          disabled={receivingRequest === r.id || !(arrivalSerials[r.id] || []).some((serial) => serial.trim())}
-                          className="mt-3 rounded bg-brand-deep px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                        >
-                          {receivingRequest === r.id ? "Registering..." : "Register received units"}
-                        </button>
-                      </section>
-                    );
-                  })()
-                )}
-
-                {r.status === "approved" && (
-                  <p className="mt-1 text-xs">
-                    {r.tax_registered ? (
-                      <span className="text-green-700">
-                        ✓ Registered for tax/books
-                        {r.tax_reference && ` — Ref: ${r.tax_reference}`}
-                      </span>
-                    ) : (
-                      <span className="text-amber-700">
-                        ⏳ Not yet registered
-                      </span>
-                    )}
-                  </p>
-                )}
-
-                {r.approvals && r.approvals.length > 0 && (
-                  <div className="mt-2 border-t pt-2 text-sm text-gray-600">
-                    {r.approvals.map((a, idx) => (
-                      <p key={idx}>
-                        {a.role_at_time} ({a.approver?.name || "Unknown"}):{" "}
-                        <span className="font-medium">{a.decision}</span>
-                        {a.comment && ` — "${a.comment}"`}
-                      </p>
-                    ))}
+                <details>
+                  <summary className="cursor-pointer text-sm text-brand-deep">
+                    View request details
+                  </summary>
+                  <div className="mt-3">
+                    <RequestDetails request={request} />
                   </div>
-                )}
+                </details>
 
-                {(r.request_assets || []).length > 0 && (
-                  <div className="mt-2 border-t pt-2 text-sm">
-                    <p className="font-medium text-gray-800">Units assigned by finance</p>
-                    <ul className="mt-1 space-y-1 text-gray-600">
-                      {r.request_assets.map((assigned) => (
-                        <li key={assigned.id}>
-                          {assigned.asset?.asset_tag || "Asset"}
-                          {assigned.asset?.serial_number ? ` · SN ${assigned.asset.serial_number}` : ""}
-                          {` · ${assigned.fulfillment_mode === "lend" ? "Lent" : "Assigned"}`}
-                          {assigned.source === "purchase" ? " · Purchased" : " · From inventory"}
+                {!!request.approvals?.length && (
+                  <ul className="space-y-2 border-t pt-3 text-sm text-gray-700">
+                    {[...(request.approvals || [])]
+                      .sort(
+                        (a, b) =>
+                          new Date(b.created_at).getTime() -
+                          new Date(a.created_at).getTime(),
+                      )
+                      .map((approval, index) => (
+                        <li key={`${approval.created_at}-${index}`}>
+                          <p>
+                            <span className="capitalize">
+                              {approval.role_at_time}
+                            </span>
+                            {" · "}
+                            {approval.approver?.name || "Unknown"}
+                            {" · "}
+                            <strong>{approval.decision}</strong>
+                            {" · "}
+                            {formatDate(approval.created_at)}
+                          </p>
+                          {approval.comment && (
+                            <p className="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2">
+                              {approval.comment}
+                            </p>
+                          )}
                         </li>
                       ))}
-                    </ul>
-                  </div>
+                  </ul>
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+
+                {isEquipment(request) &&
+                  request.status === "approved" && (
+                    <Link
+                      href="/assets/borrowed"
+                      className="inline-block text-sm text-brand-deep underline"
+                    >
+                      View devices and return status on Borrowed items
+                    </Link>
+                  )}
+
+                {!isEquipment(request) &&
+                  request.status === "approved" && (
+                    <p className="text-xs text-gray-600">
+                      {request.tax_registered
+                        ? `Registered for tax/books${
+                            request.tax_reference
+                              ? ` · Ref: ${request.tax_reference}`
+                              : ""
+                          }`
+                        : "Not registered for tax/books"}
+                    </p>
+                  )}
+              </article>
+            ))
+          )}
+        </section>
+      </main>
     </div>
   );
 }
