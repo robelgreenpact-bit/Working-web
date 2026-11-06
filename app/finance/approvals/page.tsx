@@ -15,7 +15,7 @@ type RequestRow = {
   type: string;
   title: string;
   description: string | null;
-  quantity: number | null;
+  quantity: number | string | null;
   asset_category: string | null;
   requested_item_name?: string | null;
   item_name: string | null;
@@ -24,7 +24,10 @@ type RequestRow = {
   justification: string | null;
   created_at: string;
   attachments?: Attachment[];
-  requester: { name: string; email: string } | null;
+  requester: {
+    name: string | null;
+    email: string | null;
+  } | null;
 };
 
 type HistoryRow = RequestRow & {
@@ -36,13 +39,13 @@ type HistoryRow = RequestRow & {
     comment: string | null;
     role_at_time: string;
     created_at: string;
-    approver?: { name: string } | null;
+    approver?: { name: string | null } | null;
   }[];
 };
 
 type AssetChoice = {
   id: string;
-  asset_tag: string;
+  asset_tag: string | null;
   item_name: string | null;
   category: string | null;
   electronics_subcategory: string | null;
@@ -65,8 +68,16 @@ function itemName(request: RequestRow) {
 function isEquipment(request: RequestRow) {
   return (
     request.type === "electronics" &&
-    ["tablet", "pc"].includes(request.electronics_subcategory || "")
+    ["tablet", "pc"].includes(
+      request.electronics_subcategory || "",
+    )
   );
+}
+
+function equipmentLabel(request: RequestRow) {
+  return request.electronics_subcategory === "tablet"
+    ? "Tablets"
+    : "PCs";
 }
 
 function hasUnknownElectronicsType(request: RequestRow) {
@@ -78,8 +89,27 @@ function hasUnknownElectronicsType(request: RequestRow) {
   );
 }
 
+function requestedQuantity(request: RequestRow): number | null {
+  const value = request.quantity;
+
+  if (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && !value.trim())
+  ) {
+    return null;
+  }
+
+  const quantity = Number(value);
+
+  return Number.isSafeInteger(quantity) && quantity > 0
+    ? quantity
+    : null;
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
+
   return Number.isNaN(date.getTime())
     ? "Unknown date"
     : date.toLocaleDateString();
@@ -89,16 +119,15 @@ function matchingAssets(
   request: RequestRow,
   assets: AssetChoice[],
 ) {
-  const name = normalize(itemName(request));
+  if (!isEquipment(request)) return [];
 
-  if (!isEquipment(request) || !name) return [];
-
+  // Match equipment type only.
+  // Brand and item name do not restrict device selection.
   return assets.filter(
     (asset) =>
       asset.category === "electronics" &&
       asset.electronics_subcategory ===
-        request.electronics_subcategory &&
-      normalize(asset.item_name) === name,
+        request.electronics_subcategory,
   );
 }
 
@@ -121,10 +150,13 @@ async function readResponse(response: Response) {
 }
 
 function RequestDetails({ request }: { request: RequestRow }) {
+  const equipment = isEquipment(request);
+  const quantity = requestedQuantity(request);
+
   return (
     <div className="space-y-3 text-sm">
       <div className="flex flex-wrap gap-x-6 gap-y-2 text-gray-700">
-        {itemName(request) && (
+        {!equipment && itemName(request) && (
           <span>
             <strong>Item:</strong> {itemName(request)}
           </span>
@@ -137,13 +169,14 @@ function RequestDetails({ request }: { request: RequestRow }) {
           </span>
         )}
 
-        {request.quantity !== null && (
+        {(equipment || request.quantity != null) && (
           <span>
-            <strong>Quantity:</strong> {request.quantity}
+            <strong>Quantity:</strong>{" "}
+            {quantity ?? "Missing or invalid"}
           </span>
         )}
 
-        {!isEquipment(request) && request.estimated_cost > 0 && (
+        {!equipment && request.estimated_cost > 0 && (
           <span>
             <strong>Estimated cost:</strong>{" "}
             {Number(request.estimated_cost).toLocaleString()} ETB
@@ -167,6 +200,7 @@ function RequestDetails({ request }: { request: RequestRow }) {
               ? "Per diem details"
               : "Description"}
           </p>
+
           <p className="whitespace-pre-wrap break-words text-gray-700">
             {request.type === "per_diem"
               ? request.description.replace(/\*\*/g, "")
@@ -178,6 +212,7 @@ function RequestDetails({ request }: { request: RequestRow }) {
       {!!request.attachments?.length && (
         <div>
           <p className="mb-1 font-medium">Attachments</p>
+
           <ul className="space-y-1">
             {request.attachments.map((attachment) => (
               <li key={attachment.id}>
@@ -238,9 +273,9 @@ export default function FinancePage() {
   >({});
   const [searches, setSearches] = useState<Record<string, string>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
-  const [taxChoices, setTaxChoices] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [taxChoices, setTaxChoices] = useState<
+    Record<string, boolean>
+  >({});
 
   const [processing, setProcessing] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -264,6 +299,7 @@ export default function FinancePage() {
           cache: "no-store",
           signal: controller.signal,
         });
+
         const data = await readResponse(response);
 
         if (!Array.isArray(data.requests)) {
@@ -291,6 +327,7 @@ export default function FinancePage() {
           cache: "no-store",
           signal: controller.signal,
         });
+
         const data = await readResponse(response);
 
         if (!Array.isArray(data.requests)) {
@@ -314,10 +351,12 @@ export default function FinancePage() {
 
     async function loadAssets() {
       try {
+        // No item-name filter: retrieve available inventory.
         const response = await fetch("/api/assets/available", {
           cache: "no-store",
           signal: controller.signal,
         });
+
         const data = await readResponse(response);
 
         if (!Array.isArray(data.assets)) {
@@ -325,10 +364,13 @@ export default function FinancePage() {
         }
 
         const sortedAssets: AssetChoice[] = [...data.assets];
+
         sortedAssets.sort((a, b) =>
-          a.asset_tag.localeCompare(b.asset_tag, undefined, {
-            numeric: true,
-          }),
+          (a.asset_tag || "").localeCompare(
+            b.asset_tag || "",
+            undefined,
+            { numeric: true },
+          ),
         );
 
         if (active) setAssets(sortedAssets);
@@ -371,6 +413,8 @@ export default function FinancePage() {
     assetId: string,
     quantity: number,
   ) {
+    if (submitting.current || loading || assetsLoading) return;
+
     setSelections((current) => {
       const selected = current[requestId] || [];
 
@@ -411,13 +455,28 @@ export default function FinancePage() {
     if (decision === "approved") {
       if (hasUnknownElectronicsType(request)) {
         setActionError(
-          "This electronics request has no valid equipment type. Correct the request before approving it.",
+          "This request has no valid electronics type. It must be corrected or resubmitted before approval.",
         );
         return;
       }
 
       if (equipment) {
-        const quantity = Number(request.quantity);
+        const quantity = requestedQuantity(request);
+
+        if (quantity === null) {
+          setActionError(
+            "This request has a missing or invalid quantity. Ask the worker to resubmit it with the number of devices required.",
+          );
+          return;
+        }
+
+        if (!request.justification?.trim()) {
+          setActionError(
+            "This request needs a justification before approval.",
+          );
+          return;
+        }
+
         const candidates = matchingAssets(request, assets);
         const availableIds = new Set(
           candidates.map((asset) => asset.id),
@@ -426,16 +485,15 @@ export default function FinancePage() {
         if (
           assetsLoading ||
           assetsError ||
-          !itemName(request) ||
-          !Number.isSafeInteger(quantity) ||
-          quantity < 1 ||
           candidates.length < quantity ||
           selected.length !== quantity ||
           new Set(selected).size !== quantity ||
           selected.some((id) => !availableIds.has(id))
         ) {
           setActionError(
-            "Select exactly the requested number of matching available devices before approving.",
+            `Select exactly ${quantity} available ${equipmentLabel(
+              request,
+            ).toLowerCase()} before approving.`,
           );
           return;
         }
@@ -493,7 +551,6 @@ export default function FinancePage() {
       );
 
       // A failed response can occur after a successful server commit.
-      // Reload both requests and inventory before allowing another action.
       refresh();
     } finally {
       submitting.current = false;
@@ -512,7 +569,8 @@ export default function FinancePage() {
               Finance approvals
             </h1>
             <p className="mt-1 text-sm text-gray-600">
-              Review approved requests and assign available devices.
+              Review manager-approved requests and assign available
+              devices.
             </p>
           </div>
 
@@ -523,12 +581,14 @@ export default function FinancePage() {
             >
               Borrowed items
             </Link>
+
             <Link
               href="/assets/inventory"
               className="rounded border bg-white px-3 py-2 text-brand-deep"
             >
               Inventory
             </Link>
+
             <button
               type="button"
               onClick={refresh}
@@ -571,7 +631,10 @@ export default function FinancePage() {
           {loading ? (
             <p className="text-gray-500">Loading requests…</p>
           ) : requestsError ? (
-            <p role="alert" className="rounded bg-red-50 p-4 text-red-700">
+            <p
+              role="alert"
+              className="rounded bg-red-50 p-4 text-red-700"
+            >
               {requestsError}
             </p>
           ) : requests.length === 0 ? (
@@ -581,43 +644,49 @@ export default function FinancePage() {
           ) : (
             requests.map((request) => {
               const equipment = isEquipment(request);
-              const quantity = Number(request.quantity);
-              const validQuantity =
-                Number.isSafeInteger(quantity) && quantity > 0;
+              const quantity = requestedQuantity(request);
               const candidates = matchingAssets(request, assets);
               const selected = selections[request.id] || [];
+
               const candidateIds = new Set(
                 candidates.map((asset) => asset.id),
               );
 
               const search = normalize(searches[request.id]);
+
               const visibleAssets = candidates.filter(
                 (asset) =>
                   !search ||
                   [
                     asset.asset_tag,
+                    asset.item_name,
                     asset.serial_number,
                     asset.location,
-                    asset.item_name,
-                  ].some((value) => normalize(value).includes(search)),
+                  ].some((value) =>
+                    normalize(value).includes(search),
+                  ),
               );
 
               const selectionValid =
-                validQuantity &&
+                quantity !== null &&
                 selected.length === quantity &&
                 new Set(selected).size === quantity &&
                 selected.every((id) => candidateIds.has(id));
 
               const insufficientStock =
-                validQuantity && candidates.length < quantity;
+                quantity !== null && candidates.length < quantity;
+
+              const missingJustification =
+                equipment && !request.justification?.trim();
 
               const canApprove =
                 processing === null &&
+                !loading &&
                 !hasUnknownElectronicsType(request) &&
                 (!equipment ||
                   (!assetsLoading &&
                     !assetsError &&
-                    Boolean(itemName(request)) &&
+                    !missingJustification &&
                     !insufficientStock &&
                     selectionValid));
 
@@ -631,16 +700,19 @@ export default function FinancePage() {
                       <h3 className="text-lg font-semibold text-gray-900">
                         {request.title}
                       </h3>
+
                       <p className="text-sm text-gray-600">
                         {request.requester?.name || "Unknown worker"}
                         {request.requester?.email
                           ? ` · ${request.requester.email}`
                           : ""}
                       </p>
+
                       <p className="mt-1 text-xs capitalize text-gray-500">
                         {request.type.replaceAll("_", " ")}
                       </p>
                     </div>
+
                     <p className="text-xs text-gray-500">
                       Submitted {formatDate(request.created_at)}
                     </p>
@@ -650,9 +722,9 @@ export default function FinancePage() {
 
                   {hasUnknownElectronicsType(request) && (
                     <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">
-                      This older request has no valid equipment type.
-                      Correct its type before approving, or reject it
-                      with a reason.
+                      This request has no valid electronics type.
+                      It must be corrected or resubmitted before
+                      approval.
                     </p>
                   )}
 
@@ -663,35 +735,58 @@ export default function FinancePage() {
                           <h4 className="font-semibold text-gray-900">
                             Select devices from inventory
                           </h4>
+
                           <p className="text-sm text-gray-600">
-                            {itemName(request) || "Item name missing"}
+                            All available{" "}
+                            {equipmentLabel(request).toLowerCase()}
                             {" · "}
-                            {request.electronics_subcategory?.toUpperCase()}
+                            Any brand or device name
                           </p>
                         </div>
+
                         <p className="text-sm font-medium text-brand-deep">
-                          {selected.length} /{" "}
-                          {validQuantity ? quantity : "?"} selected
+                          {selected.length} / {quantity ?? "?"} selected
                         </p>
                       </div>
 
-                      {!validQuantity || !itemName(request) ? (
-                        <p className="text-sm text-red-700">
-                          The request needs a valid item name and
-                          positive whole-number quantity before approval.
+                      {quantity === null && (
+                        <p
+                          role="alert"
+                          className="rounded bg-red-50 p-3 text-sm text-red-700"
+                        >
+                          This request has a missing or invalid quantity.
+                          Ask the worker to resubmit it with the number
+                          of devices required. Item names are not
+                          required for Tablet or PC requests.
                         </p>
-                      ) : assetsLoading ? (
+                      )}
+
+                      {missingJustification && (
+                        <p
+                          role="alert"
+                          className="rounded bg-red-50 p-3 text-sm text-red-700"
+                        >
+                          This request needs a justification before
+                          approval.
+                        </p>
+                      )}
+
+                      {assetsLoading ? (
                         <p className="text-sm text-gray-500">
                           Loading available devices…
                         </p>
                       ) : assetsError ? (
-                        <p role="alert" className="text-sm text-red-700">
+                        <p
+                          role="alert"
+                          className="text-sm text-red-700"
+                        >
                           {assetsError} Use Refresh to try again.
                         </p>
                       ) : (
                         <>
                           <p className="text-sm text-gray-600">
-                            {candidates.length} matching devices available.
+                            {candidates.length} available{" "}
+                            {equipmentLabel(request).toLowerCase()}.
                           </p>
 
                           {insufficientStock && (
@@ -705,14 +800,15 @@ export default function FinancePage() {
                           <input
                             type="search"
                             value={searches[request.id] || ""}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const value = event.target.value;
                               setSearches((current) => ({
                                 ...current,
-                                [request.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="Search asset code, serial or location"
-                            aria-label={`Search available devices for ${request.title}`}
+                                [request.id]: value,
+                              }));
+                            }}
+                            placeholder="Search name, asset code, serial or location"
+                            aria-label={`Search devices for ${request.title}`}
                             className="w-full rounded border bg-white px-3 py-2 text-sm text-gray-900"
                           />
 
@@ -720,15 +816,29 @@ export default function FinancePage() {
                             <table className="w-full text-left text-sm">
                               <thead className="sticky top-0 bg-gray-100 text-gray-700">
                                 <tr>
-                                  <th className="p-3">Select</th>
-                                  <th className="p-3">Asset code</th>
-                                  <th className="p-3">Serial number</th>
-                                  <th className="p-3">Location</th>
+                                  <th scope="col" className="p-3">
+                                    Select
+                                  </th>
+                                  <th scope="col" className="p-3">
+                                    Device
+                                  </th>
+                                  <th scope="col" className="p-3">
+                                    Asset code
+                                  </th>
+                                  <th scope="col" className="p-3">
+                                    Serial number
+                                  </th>
+                                  <th scope="col" className="p-3">
+                                    Location
+                                  </th>
                                 </tr>
                               </thead>
+
                               <tbody>
                                 {visibleAssets.map((asset) => {
-                                  const checked = selected.includes(asset.id);
+                                  const checked = selected.includes(
+                                    asset.id,
+                                  );
 
                                   return (
                                     <tr
@@ -745,27 +855,43 @@ export default function FinancePage() {
                                           checked={checked}
                                           disabled={
                                             processing !== null ||
+                                            quantity === null ||
                                             insufficientStock ||
                                             (!checked &&
+                                              quantity !== null &&
                                               selected.length >= quantity)
                                           }
-                                          onChange={() =>
-                                            toggleAsset(
-                                              request.id,
-                                              asset.id,
-                                              quantity,
-                                            )
-                                          }
-                                          aria-label={`Select ${asset.asset_tag}`}
+                                          onChange={() => {
+                                            if (quantity !== null) {
+                                              toggleAsset(
+                                                request.id,
+                                                asset.id,
+                                                quantity,
+                                              );
+                                            }
+                                          }}
+                                          aria-label={`Select ${
+                                            asset.asset_tag ||
+                                            asset.item_name ||
+                                            asset.id
+                                          }`}
                                           className="h-4 w-4"
                                         />
                                       </td>
-                                      <td className="p-3 font-medium">
-                                        {asset.asset_tag}
+
+                                      <td className="p-3">
+                                        {asset.item_name ||
+                                          "Unnamed device"}
                                       </td>
+
+                                      <td className="p-3 font-medium">
+                                        {asset.asset_tag || "—"}
+                                      </td>
+
                                       <td className="p-3">
                                         {asset.serial_number || "—"}
                                       </td>
+
                                       <td className="p-3">
                                         {asset.location || "—"}
                                       </td>
@@ -776,11 +902,13 @@ export default function FinancePage() {
                                 {visibleAssets.length === 0 && (
                                   <tr>
                                     <td
-                                      colSpan={4}
+                                      colSpan={5}
                                       className="p-4 text-center text-gray-500"
                                     >
                                       {candidates.length === 0
-                                        ? "No matching devices available."
+                                        ? `No available ${equipmentLabel(
+                                            request,
+                                          ).toLowerCase()} in inventory.`
                                         : "No devices match your search."}
                                     </td>
                                   </tr>
@@ -791,7 +919,10 @@ export default function FinancePage() {
 
                           {selected.length > 0 && (
                             <div className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="font-medium">Selected:</span>
+                              <span className="font-medium">
+                                Selected:
+                              </span>
+
                               {candidates
                                 .filter((asset) =>
                                   selected.includes(asset.id),
@@ -801,9 +932,12 @@ export default function FinancePage() {
                                     key={asset.id}
                                     className="rounded bg-blue-100 px-2 py-1 text-blue-900"
                                   >
-                                    {asset.asset_tag}
+                                    {asset.asset_tag ||
+                                      asset.item_name ||
+                                      asset.id}
                                   </span>
                                 ))}
+
                               <button
                                 type="button"
                                 disabled={processing !== null}
@@ -821,11 +955,10 @@ export default function FinancePage() {
                           )}
 
                           <p className="text-xs text-gray-600">
-                            Approval immediately records these devices as
-                            borrowed by{" "}
+                            Approval immediately records the selected
+                            devices as borrowed by{" "}
                             {request.requester?.name || "the worker"}.
-                            There is no due date. Availability is checked
-                            again when the approval is saved.
+                            Availability is checked again when saving.
                           </p>
                         </>
                       )}
@@ -839,12 +972,13 @@ export default function FinancePage() {
                           type="checkbox"
                           checked={Boolean(taxChoices[request.id])}
                           disabled={processing !== null}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            const checked = event.target.checked;
                             setTaxChoices((current) => ({
                               ...current,
-                              [request.id]: event.target.checked,
-                            }))
-                          }
+                              [request.id]: checked,
+                            }));
+                          }}
                           className="h-4 w-4"
                         />
                         Send to Tax Registry
@@ -858,16 +992,18 @@ export default function FinancePage() {
                     >
                       Comment / rejection reason
                     </label>
+
                     <textarea
                       id={`comment-${request.id}`}
                       value={comments[request.id] || ""}
                       disabled={processing !== null}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const value = event.target.value;
                         setComments((current) => ({
                           ...current,
-                          [request.id]: event.target.value,
-                        }))
-                      }
+                          [request.id]: value,
+                        }));
+                      }}
                       placeholder="Required when rejecting; visible to the worker."
                       rows={3}
                       className="w-full rounded border p-3 text-sm text-gray-900"
@@ -922,7 +1058,10 @@ export default function FinancePage() {
           {historyLoading ? (
             <p className="text-gray-500">Loading history…</p>
           ) : historyError ? (
-            <p role="alert" className="rounded bg-red-50 p-4 text-red-700">
+            <p
+              role="alert"
+              className="rounded bg-red-50 p-4 text-red-700"
+            >
               {historyError}
             </p>
           ) : history.length === 0 ? (
@@ -937,13 +1076,16 @@ export default function FinancePage() {
               >
                 <div className="flex flex-wrap justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold">{request.title}</h3>
+                    <h3 className="font-semibold">
+                      {request.title}
+                    </h3>
                     <p className="text-sm text-gray-500">
                       {request.requester?.name || "Unknown worker"}
                       {" · "}
                       {formatDate(request.created_at)}
                     </p>
                   </div>
+
                   <span
                     className={`self-start rounded px-2 py-1 text-xs capitalize ${
                       request.status === "rejected"
@@ -987,6 +1129,7 @@ export default function FinancePage() {
                             {" · "}
                             {formatDate(approval.created_at)}
                           </p>
+
                           {approval.comment && (
                             <p className="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2">
                               {approval.comment}

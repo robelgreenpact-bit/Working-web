@@ -69,8 +69,17 @@ function getText(formData: FormData, field: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "private, no-store",
+    },
+  });
+}
+
 function fail(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+  return json({ error: message }, status);
 }
 
 export async function POST(request: Request) {
@@ -79,10 +88,11 @@ export async function POST(request: Request) {
 
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      return fail("Unauthorized", 401);
+    if (authError || !user) {
+      return fail("Unauthorized.", 401);
     }
 
     const formData = await request.formData().catch(() => null);
@@ -97,11 +107,6 @@ export async function POST(request: Request) {
     const quantityText = getText(formData, "quantity");
     const costText = getText(formData, "estimated_cost");
     const submittedCategory = getText(formData, "asset_category");
-    const itemName = getText(formData, "item_name");
-    const requestedItemName = getText(
-      formData,
-      "requested_item_name",
-    );
     const electronicsType = getText(
       formData,
       "electronics_subcategory",
@@ -112,17 +117,26 @@ export async function POST(request: Request) {
       return fail("Select a valid request type.");
     }
 
+    if (
+      type === "electronics" &&
+      !VALID_ELECTRONICS_TYPES.includes(electronicsType)
+    ) {
+      return fail("Select Tablet, PC, or Other electronics.");
+    }
+
+    const isEquipment =
+      type === "electronics" &&
+      ["tablet", "pc"].includes(electronicsType);
+
     const needsAssetDetails = [
       "physical_good",
       "electronics",
       "other_asset",
     ].includes(type);
 
-    const isEquipment =
-      type === "electronics" &&
-      ["tablet", "pc"].includes(electronicsType);
+    // Tablet/PC requests are matched by subtype only.
+    const needsItemName = needsAssetDetails && !isEquipment;
 
-    // Preserve the existing cost rules for other request types.
     const needsCost = ![
       "document_request",
       "per_diem",
@@ -135,37 +149,18 @@ export async function POST(request: Request) {
         : submittedCategory || "other";
 
     if (
-      type === "electronics" &&
-      !VALID_ELECTRONICS_TYPES.includes(electronicsType)
-    ) {
-      return fail("Select Tablet, PC, or Other electronics.");
-    }
-
-    if (
       needsAssetDetails &&
       !VALID_ASSET_CATEGORIES.includes(assetCategory)
     ) {
       return fail("Select a valid asset category.");
     }
 
-    // Accept the older item_name field as a fallback, but
-    // always save requested_item_name for Tablet/PC requests.
-    let canonicalItemName = isEquipment
-      ? requestedItemName || itemName
-      : itemName;
+    // Ignore old item-name fields for Tablet/PC requests.
+    let canonicalItemName = needsItemName
+      ? getText(formData, "item_name")
+      : "";
 
-    if (
-      isEquipment &&
-      requestedItemName &&
-      itemName &&
-      requestedItemName.toLowerCase() !== itemName.toLowerCase()
-    ) {
-      return fail(
-        "The selected item names do not match. Select the item again.",
-      );
-    }
-
-    if (needsAssetDetails && !canonicalItemName) {
+    if (needsItemName && !canonicalItemName) {
       return fail("Item name is required for this request.");
     }
 
@@ -176,7 +171,7 @@ export async function POST(request: Request) {
     let quantity: number | null = null;
 
     if (needsAssetDetails || needsCost) {
-      // Equipment requests must explicitly provide a quantity.
+      // Never silently substitute a quantity for Tablet/PC.
       if (isEquipment && !quantityText) {
         return fail("Enter the number of devices requested.");
       }
@@ -204,9 +199,11 @@ export async function POST(request: Request) {
       }
     }
 
-    if (needsAssetDetails) {
+    // Preserve name canonicalization for OTHER asset request types.
+    // Tablet/PC requests never query the item-name catalog.
+    if (needsItemName) {
       const serviceClient = getServiceClient();
-      const normalizedName = canonicalItemName.trim().toLowerCase();
+      const normalizedName = canonicalItemName.toLowerCase();
 
       let matchedName: string | null = null;
       let offset = 0;
@@ -229,14 +226,14 @@ export async function POST(request: Request) {
           );
         }
 
-        // Do not filter by availability: an out-of-stock
-        // registered item can still be requested.
         const { data: catalogItems, error: catalogError } =
           await query;
 
         if (catalogError) {
+          console.error("Item name lookup failed:", catalogError);
+
           return fail(
-            "Unable to verify registered item names. Please try again.",
+            "Unable to verify item names. Please try again.",
             500,
           );
         }
@@ -260,19 +257,13 @@ export async function POST(request: Request) {
         offset += pageSize;
       }
 
-      if (isEquipment && !matchedName) {
-        return fail(
-          "Select a registered item matching the chosen Tablet or PC type.",
-        );
-      }
-
-      // Other asset request types may still use custom names.
-      canonicalItemName =
-        matchedName || canonicalItemName.trim();
+      // Custom names remain supported for these request types.
+      canonicalItemName = matchedName || canonicalItemName;
     }
 
-    const title =
-      type === "electronics"
+    const title = isEquipment
+      ? `${electronicsType === "tablet" ? "Tablet" : "PC"} request`
+      : type === "electronics"
         ? `${canonicalItemName} request`
         : submittedTitle;
 
@@ -286,14 +277,15 @@ export async function POST(request: Request) {
         requester_id: user.id,
         type,
         title,
-        description: description || null,
+        description: isEquipment ? null : description || null,
         quantity,
         estimated_cost: estimatedCost,
         asset_category: needsAssetDetails ? assetCategory : null,
-        item_name: needsAssetDetails ? canonicalItemName : null,
-        requested_item_name: isEquipment
-          ? canonicalItemName
-          : null,
+
+        // Device names stay in inventory, not in Tablet/PC requests.
+        item_name: needsItemName ? canonicalItemName : null,
+        requested_item_name: null,
+
         electronics_subcategory:
           type === "electronics" ? electronicsType : null,
         justification: justification || null,
@@ -303,14 +295,15 @@ export async function POST(request: Request) {
       .single();
 
     if (insertError || !newRequest) {
+      console.error("Request creation failed:", insertError);
+
       return fail(
         insertError?.message || "Unable to create the request.",
         500,
       );
     }
 
-    // Once the request exists, attachment failures must not
-    // return a request-creation failure and encourage duplicates.
+    // Attachment failures must not imply that request creation failed.
     const warnings: string[] = [];
 
     const files = formData
@@ -353,7 +346,6 @@ export async function POST(request: Request) {
         if (attachmentError) {
           warnings.push(`Could not attach "${file.name}".`);
 
-          // Best-effort cleanup of an upload without metadata.
           try {
             await supabase.storage
               .from("attachments")
@@ -367,14 +359,16 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(
+    return json(
       {
         request: newRequest,
         warnings,
       },
-      { status: 201 },
+      201,
     );
-  } catch {
+  } catch (error) {
+    console.error("Request submission failed:", error);
+
     return fail(
       "The submission could not be confirmed. Check My Requests before trying again.",
       500,
@@ -388,10 +382,11 @@ export async function GET() {
 
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      return fail("Unauthorized", 401);
+    if (authError || !user) {
+      return fail("Unauthorized.", 401);
     }
 
     const serviceClient = getServiceClient();
@@ -401,9 +396,7 @@ export async function GET() {
     let offset = 0;
 
     while (true) {
-      // Service access is restricted to the authenticated user's
-      // own requests. It allows their approval comments to be
-      // included even when approval-table RLS is more restrictive.
+      // Service access is restricted to this user's own requests.
       const { data, error } = await serviceClient
         .from("requests")
         .select(`
@@ -435,6 +428,8 @@ export async function GET() {
         .range(offset, offset + pageSize - 1);
 
       if (error) {
+        console.error("Worker requests query failed:", error);
+
         return fail(
           "Unable to load your requests and approval details.",
           500,
@@ -465,7 +460,6 @@ export async function GET() {
 
       const loans = [...(requestRow.equipment_loans || [])].sort(
         (a, b) => {
-          // Preserve unknown historical dates.
           if (!a.borrowed_at && !b.borrowed_at) return 0;
           if (!a.borrowed_at) return 1;
           if (!b.borrowed_at) return -1;
@@ -489,8 +483,7 @@ export async function GET() {
       return {
         ...requestRow,
         approvals,
-        rejection_reason:
-          rejection?.comment?.trim() || null,
+        rejection_reason: rejection?.comment?.trim() || null,
         rejected_by_role: rejection?.role_at_time || null,
         equipment_loans: equipmentLoans,
         borrowed_count: equipmentLoans.filter(
@@ -499,15 +492,10 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json(
-      { requests: result },
-      {
-        headers: {
-          "Cache-Control": "private, no-store",
-        },
-      },
-    );
-  } catch {
+    return json({ requests: result });
+  } catch (error) {
+    console.error("Worker requests endpoint failed:", error);
+
     return fail(
       "Unable to load your requests. Please try again.",
       500,

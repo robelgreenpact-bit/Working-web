@@ -197,11 +197,18 @@ export default function NewRequestPage() {
     form.type === "electronics" &&
     ["tablet", "pc"].includes(form.electronics_subcategory);
 
-  const needsItemName = [
+  const needsJustification = [
     "electronics",
     "physical_good",
     "other_asset",
   ].includes(form.type);
+
+  // Tablet/PC requests do not require an item name.
+  // Preserve item names for the other existing request types.
+  const needsItemName =
+    ["physical_good", "other_asset"].includes(form.type) ||
+    (form.type === "electronics" &&
+      form.electronics_subcategory === "other");
 
   const itemCategory =
     form.type === "electronics"
@@ -210,12 +217,7 @@ export default function NewRequestPage() {
         ? form.asset_category
         : "";
 
-  // Wait until a Tablet/PC/Other selection is made before
-  // loading names for an electronics request.
-  const canLoadNames =
-    Boolean(itemCategory) &&
-    (form.type !== "electronics" ||
-      Boolean(form.electronics_subcategory));
+  const canLoadNames = needsItemName && Boolean(itemCategory);
 
   const params = new URLSearchParams();
 
@@ -223,21 +225,21 @@ export default function NewRequestPage() {
     params.set("category", itemCategory);
 
     if (
-      itemCategory === "electronics" &&
+      form.type === "electronics" &&
       form.electronics_subcategory
     ) {
       params.set("subcategory", form.electronics_subcategory);
     }
   }
 
+  // No item-name request is made for Tablet or PC.
   const namesUrl = canLoadNames
     ? `/api/assets/item-names?${params.toString()}`
     : "";
 
-  // Associate results with the exact current selection.
-  // Results for a previous type cannot populate this dropdown.
   const namesKey = namesUrl ? `${namesUrl}|${namesRetry}` : "";
-  const namesReady = Boolean(namesKey) && itemNamesState.key === namesKey;
+  const namesReady =
+    Boolean(namesKey) && itemNamesState.key === namesKey;
   const namesLoading = Boolean(namesKey) && !namesReady;
   const namesError = namesReady ? itemNamesState.error : "";
   const inventoryItemNames = namesReady ? itemNamesState.names : [];
@@ -304,8 +306,8 @@ export default function NewRequestPage() {
       type: value,
       item_name: "",
       description: "",
-      asset_category:
-        value === "electronics" ? "electronics" : "",
+      quantity: "1",
+      asset_category: value === "electronics" ? "electronics" : "",
       electronics_subcategory: "",
     }));
   }
@@ -316,12 +318,6 @@ export default function NewRequestPage() {
     if (submitting.current) return;
 
     setError("");
-
-    const requestedItemName = (
-      form.item_name === "__custom__"
-        ? customItemName
-        : form.item_name
-    ).trim();
 
     if (
       form.type === "electronics" &&
@@ -341,34 +337,33 @@ export default function NewRequestPage() {
       return;
     }
 
+    const requestedItemName = needsItemName
+      ? (
+          form.item_name === "__custom__"
+            ? customItemName
+            : form.item_name
+        ).trim()
+      : "";
+
     if (needsItemName && !requestedItemName) {
       setError("Select or enter an item name.");
       return;
     }
 
-    if (isEquipment) {
-      if (
-        namesLoading ||
-        namesError ||
-        !namesReady ||
-        !inventoryItemNames.includes(requestedItemName)
-      ) {
-        setError(
-          "Select a registered item from the current Tablet/PC list.",
-        );
-        return;
-      }
-    }
-
-    if (needsItemName && !form.justification.trim()) {
+    if (needsJustification && !form.justification.trim()) {
       setError("Enter a justification for your request.");
       return;
     }
 
+    const requestedQuantity = Number(form.quantity);
+
     if (
       config.needsQuantity &&
-      (!Number.isSafeInteger(Number(form.quantity)) ||
-        Number(form.quantity) < 1)
+      (
+        !form.quantity.trim() ||
+        !Number.isSafeInteger(requestedQuantity) ||
+        requestedQuantity < 1
+      )
     ) {
       setError("Quantity must be a positive whole number.");
       return;
@@ -376,16 +371,19 @@ export default function NewRequestPage() {
 
     if (
       config.needsCost &&
-      (form.estimated_cost.trim() === "" ||
+      (
+        form.estimated_cost.trim() === "" ||
         !Number.isFinite(Number(form.estimated_cost)) ||
-        Number(form.estimated_cost) < 0)
+        Number(form.estimated_cost) < 0
+      )
     ) {
       setError("Enter a valid estimated cost of zero or greater.");
       return;
     }
 
-    const submissionTitle =
-      form.type === "electronics"
+    const submissionTitle = isEquipment
+      ? `${form.electronics_subcategory === "tablet" ? "Tablet" : "PC"} request`
+      : form.type === "electronics"
         ? `${requestedItemName} request`
         : form.title.trim();
 
@@ -398,6 +396,7 @@ export default function NewRequestPage() {
 
     formData.append("type", form.type);
     formData.append("title", submissionTitle);
+
     formData.append(
       "description",
       form.type === "per_diem"
@@ -414,24 +413,25 @@ export default function NewRequestPage() {
         : form.asset_category,
     );
 
-    // Keep the existing field for other request types.
-    formData.append("item_name", requestedItemName || submissionTitle);
-
-    // This is the field required by the simplified database function.
-    if (isEquipment) {
-      formData.append("requested_item_name", requestedItemName);
+    // Equipment is requested by Tablet/PC type only.
+    // Do not send a placeholder item name or requested_item_name.
+    if (needsItemName) {
+      formData.append("item_name", requestedItemName);
     }
 
-    formData.append("justification", form.justification.trim());
-    formData.append(
-      "electronics_subcategory",
-      form.type === "electronics"
-        ? form.electronics_subcategory
-        : "",
-    );
+    if (needsJustification) {
+      formData.append("justification", form.justification.trim());
+    }
+
+    if (form.type === "electronics") {
+      formData.append(
+        "electronics_subcategory",
+        form.electronics_subcategory,
+      );
+    }
 
     if (config.needsQuantity) {
-      formData.append("quantity", String(Number(form.quantity)));
+      formData.append("quantity", String(requestedQuantity));
     }
 
     if (config.needsCost) {
@@ -470,13 +470,6 @@ export default function NewRequestPage() {
       setLoading(false);
     }
   }
-
-  const equipmentNotReady =
-    isEquipment &&
-    (namesLoading ||
-      Boolean(namesError) ||
-      !namesReady ||
-      inventoryItemNames.length === 0);
 
   return (
     <div>
@@ -533,10 +526,12 @@ export default function NewRequestPage() {
                   required
                   value={form.asset_category}
                   onChange={(event) => {
+                    const value = event.target.value;
+
                     setCustomItemName("");
                     setForm((previous) => ({
                       ...previous,
-                      asset_category: event.target.value,
+                      asset_category: value,
                       item_name: "",
                       electronics_subcategory: "",
                     }));
@@ -547,7 +542,9 @@ export default function NewRequestPage() {
                   <option value="electronics">Electronics</option>
                   <option value="furniture">Furniture</option>
                   <option value="vehicle">Vehicle</option>
-                  <option value="office_supplies">Office supplies</option>
+                  <option value="office_supplies">
+                    Office supplies
+                  </option>
                 </select>
               </label>
             )}
@@ -559,11 +556,13 @@ export default function NewRequestPage() {
                   required
                   value={form.electronics_subcategory}
                   onChange={(event) => {
+                    const value = event.target.value;
+
                     setCustomItemName("");
                     setError("");
                     setForm((previous) => ({
                       ...previous,
-                      electronics_subcategory: event.target.value,
+                      electronics_subcategory: value,
                       item_name: "",
                     }));
                   }}
@@ -586,58 +585,13 @@ export default function NewRequestPage() {
                   Item name
                 </label>
 
-                {isEquipment ? (
-                  <>
-                    <select
-                      id="request-item"
-                      required
-                      value={form.item_name}
-                      disabled={
-                        namesLoading ||
-                        Boolean(namesError) ||
-                        inventoryItemNames.length === 0
-                      }
-                      onChange={(event) =>
-                        setForm((previous) => ({
-                          ...previous,
-                          item_name: event.target.value,
-                        }))
-                      }
-                      className={inputClass}
-                    >
-                      <option value="">
-                        {namesLoading
-                          ? "Loading registered items..."
-                          : "Select a registered item"}
-                      </option>
-                      {inventoryItemNames.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-
-                    {namesReady &&
-                      !namesError &&
-                      inventoryItemNames.length === 0 && (
-                        <p className="mt-2 text-sm text-amber-800">
-                          No item names are registered for this type.
-                          Ask finance or admin to register the equipment.
-                        </p>
-                      )}
-
-                    <p className="mt-2 text-xs text-gray-500">
-                      Registered items remain listed even when all devices
-                      are borrowed. Finance will check availability.
-                    </p>
-                  </>
-                ) : !canLoadNames ? (
+                {!canLoadNames ? (
                   <p className="mt-2 text-sm text-gray-500">
-                    Select the category or electronics type first.
+                    Select the asset category first.
                   </p>
                 ) : namesLoading ? (
                   <p className="mt-2 text-sm text-gray-500">
-                    Loading item names...
+                    Loading item names…
                   </p>
                 ) : inventoryItemNames.length > 0 ? (
                   <>
@@ -646,10 +600,12 @@ export default function NewRequestPage() {
                       required
                       value={form.item_name}
                       onChange={(event) => {
+                        const value = event.target.value;
+
                         setCustomItemName("");
                         setForm((previous) => ({
                           ...previous,
-                          item_name: event.target.value,
+                          item_name: value,
                         }));
                       }}
                       className={inputClass}
@@ -690,11 +646,13 @@ export default function NewRequestPage() {
                         : form.item_name
                     }
                     onChange={(event) => {
+                      const value = event.target.value;
+
                       setForm((previous) => ({
                         ...previous,
                         item_name: "__custom__",
                       }));
-                      setCustomItemName(event.target.value);
+                      setCustomItemName(value);
                     }}
                     placeholder="Enter item name"
                     className={inputClass}
@@ -725,12 +683,13 @@ export default function NewRequestPage() {
                   required
                   type="text"
                   value={form.title}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value = event.target.value;
                     setForm((previous) => ({
                       ...previous,
-                      title: event.target.value,
-                    }))
-                  }
+                      title: value,
+                    }));
+                  }}
                   placeholder="Enter request title"
                   className={inputClass}
                 />
@@ -748,12 +707,13 @@ export default function NewRequestPage() {
                   <input
                     type="date"
                     value={perDiemFields.date}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.target.value;
                       setPerDiemFields((previous) => ({
                         ...previous,
-                        date: event.target.value,
-                      }))
-                    }
+                        date: value,
+                      }));
+                    }}
                     className={inputClass}
                   />
                 </label>
@@ -768,12 +728,13 @@ export default function NewRequestPage() {
                       <input
                         type={field.type}
                         value={perDiemFields[field.key]}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const value = event.target.value;
                           setPerDiemFields((previous) => ({
                             ...previous,
-                            [field.key]: event.target.value,
-                          }))
-                        }
+                            [field.key]: value,
+                          }));
+                        }}
                         className={inputClass}
                       />
                     </label>
@@ -790,12 +751,13 @@ export default function NewRequestPage() {
                       <input
                         type="text"
                         value={perDiemFields[field.key]}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const value = event.target.value;
                           setPerDiemFields((previous) => ({
                             ...previous,
-                            [field.key]: event.target.value,
-                          }))
-                        }
+                            [field.key]: value,
+                          }));
+                        }}
                         className={inputClass}
                       />
                     </label>
@@ -807,12 +769,13 @@ export default function NewRequestPage() {
                   <textarea
                     rows={4}
                     value={perDiemFields.report}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.target.value;
                       setPerDiemFields((previous) => ({
                         ...previous,
-                        report: event.target.value,
-                      }))
-                    }
+                        report: value,
+                      }));
+                    }}
                     className={inputClass}
                   />
                 </label>
@@ -823,12 +786,13 @@ export default function NewRequestPage() {
                 <textarea
                   rows={3}
                   value={form.description}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value = event.target.value;
                     setForm((previous) => ({
                       ...previous,
-                      description: event.target.value,
-                    }))
-                  }
+                      description: value,
+                    }));
+                  }}
                   className={inputClass}
                 />
               </label>
@@ -836,37 +800,40 @@ export default function NewRequestPage() {
 
             {config.needsQuantity && (
               <label className="block text-sm font-medium text-gray-700">
-                Quantity
+                {isEquipment ? "Number of devices" : "Quantity"}
                 <input
                   required
+                  name="quantity"
                   type="number"
                   min={1}
                   step={1}
                   value={form.quantity}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value = event.target.value;
                     setForm((previous) => ({
                       ...previous,
-                      quantity: event.target.value,
-                    }))
-                  }
+                      quantity: value,
+                    }));
+                  }}
                   className={inputClass}
                 />
               </label>
             )}
 
-            {needsItemName && (
+            {needsJustification && (
               <label className="block text-sm font-medium text-gray-700">
                 Justification
                 <textarea
                   required
                   rows={3}
                   value={form.justification}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value = event.target.value;
                     setForm((previous) => ({
                       ...previous,
-                      justification: event.target.value,
-                    }))
-                  }
+                      justification: value,
+                    }));
+                  }}
                   placeholder="Explain why you need these items."
                   className={inputClass}
                 />
@@ -882,12 +849,13 @@ export default function NewRequestPage() {
                   min={0}
                   step="0.01"
                   value={form.estimated_cost}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value = event.target.value;
                     setForm((previous) => ({
                       ...previous,
-                      estimated_cost: event.target.value,
-                    }))
-                  }
+                      estimated_cost: value,
+                    }));
+                  }}
                   className={inputClass}
                 />
               </label>
@@ -895,10 +863,13 @@ export default function NewRequestPage() {
 
             {isEquipment && (
               <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
-                Your request goes to the manager first. Once approved,
-                finance selects the exact devices from inventory.
-                If there is not enough stock, the request stays pending
-                or is rejected with a reason.
+                Your request goes to the manager first. After approval,
+                finance selects the requested number of available{" "}
+                {form.electronics_subcategory === "tablet"
+                  ? "tablets"
+                  : "PCs"}{" "}
+                from inventory. You do not need to choose a brand,
+                item name or individual device.
               </div>
             )}
 
@@ -920,10 +891,10 @@ export default function NewRequestPage() {
 
             <button
               type="submit"
-              disabled={loading || equipmentNotReady}
+              disabled={loading}
               className="rounded-lg bg-brand-deep px-5 py-2.5 font-medium text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Submitting..." : "Submit Request"}
+              {loading ? "Submitting…" : "Submit Request"}
             </button>
           </fieldset>
         </form>
