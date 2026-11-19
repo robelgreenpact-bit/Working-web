@@ -477,9 +477,9 @@ export async function POST(request: Request) {
       let inserted = false;
 
       for (let attempt = 0; attempt < 5; attempt++) {
-        const assetTag = await generateAssetTag(supabase, category);
+        const assetTag = await generateAssetTag(serviceClient, category);
 
-        const { error } = await supabase.from("assets").insert({
+        const { error } = await serviceClient.from("assets").insert({
           asset_tag: assetTag,
           category,
           electronics_subcategory: electronicsType,
