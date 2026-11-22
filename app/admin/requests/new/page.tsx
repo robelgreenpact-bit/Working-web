@@ -105,6 +105,12 @@ export default function NewRequestPage() {
   const router = useRouter();
 
   const config = typeConfig[form.type];
+  const needsCost =
+    config.needsCost &&
+    !(
+      form.type === "electronics" &&
+      form.electronics_subcategory === "power_bank"
+    );
 
   const buildPerDiemDescription = () => {
     const lines = [
@@ -182,7 +188,7 @@ export default function NewRequestPage() {
     if (config.needsQuantity) {
       formData.append("quantity", String(form.quantity));
     }
-    if (config.needsCost) {
+    if (needsCost) {
       formData.append("estimated_cost", form.estimated_cost);
     }
 
@@ -404,7 +410,7 @@ export default function NewRequestPage() {
             </div>
           )}
 
-          {(config.needsQuantity || config.needsCost) && (
+          {(config.needsQuantity || needsCost) && (
             <div className="mb-4 grid grid-cols-2 gap-4">
               {config.needsQuantity && (
                 <div>
@@ -423,7 +429,7 @@ export default function NewRequestPage() {
                 </div>
               )}
 
-              {config.needsCost && (
+              {needsCost && (
                 <div className={config.needsQuantity ? "" : "col-span-2"}>
                   <label className="mb-1 block text-sm text-gray-600">
                     Estimated Cost (ETB)
