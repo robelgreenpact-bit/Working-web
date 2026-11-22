@@ -82,6 +82,7 @@ export default function NewRequestPage() {
     description: "",
     quantity: 1,
     estimated_cost: "",
+    justification: "",
     electronics_subcategory: "",
   });
   const [perDiemFields, setPerDiemFields] = useState({
@@ -168,6 +169,15 @@ export default function NewRequestPage() {
     formData.append("type", form.type);
     formData.append("title", submissionTitle);
     formData.append("description", submissionDescription);
+    formData.append("justification", form.justification);
+
+    if (form.type === "electronics") {
+      formData.append("asset_category", "electronics");
+      formData.append(
+        "electronics_subcategory",
+        form.electronics_subcategory,
+      );
+    }
 
     if (config.needsQuantity) {
       formData.append("quantity", String(form.quantity));
@@ -239,6 +249,7 @@ export default function NewRequestPage() {
                 Electronics Type
               </label>
               <select
+                required
                 value={form.electronics_subcategory}
                 onChange={(e) => setForm({ ...form, electronics_subcategory: e.target.value })}
                 className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
@@ -249,6 +260,25 @@ export default function NewRequestPage() {
                 <option value="power_bank">Power bank</option>
                 <option value="other">Other</option>
               </select>
+            </div>
+          )}
+
+          {["electronics", "physical_good", "other_asset"].includes(
+            form.type,
+          ) && (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm text-gray-600">
+                Justification
+              </label>
+              <textarea
+                required
+                value={form.justification}
+                onChange={(e) =>
+                  setForm({ ...form, justification: e.target.value })
+                }
+                rows={3}
+                className="w-full rounded border border-gray-300 p-2 text-gray-900 focus:border-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-dark"
+              />
             </div>
           )}
 
