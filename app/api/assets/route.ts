@@ -11,7 +11,7 @@ const VALID_CATEGORIES = [
   "other",
 ];
 
-const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "other"];
+const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "power_bank", "other"];
 
 const VALID_STATUSES = [
   "new",
@@ -284,7 +284,7 @@ export async function POST(request: Request) {
       !VALID_ELECTRONICS_TYPES.includes(electronicsType || "")
     ) {
       return NextResponse.json(
-        { error: "Select Tablet, PC, or Other electronics." },
+        { error: "Select Tablet, PC, Power bank, or Other electronics." },
         { status: 400 },
       );
     }
@@ -298,7 +298,9 @@ export async function POST(request: Request) {
 
     const isEquipment =
       category === "electronics" &&
-      ["tablet", "pc"].includes(electronicsType || "");
+      ["tablet", "pc", "power_bank"].includes(electronicsType || "");
+    const requiresSerial =
+      isEquipment && electronicsType !== "power_bank";
 
     const quantity =
       body.quantity === undefined ||
@@ -319,13 +321,13 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "Register each Tablet or PC separately. One record must represent one device.",
+              "Register each Tablet, PC, or Power bank separately. One record must represent one device.",
           },
           { status: 400 },
         );
       }
 
-      if (!serialNumber) {
+      if (requiresSerial && !serialNumber) {
         return NextResponse.json(
           { error: "A serial number is required for this device." },
           { status: 400 },
@@ -343,7 +345,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "Tablets and PCs must be assigned through finance approval of a worker request.",
+              "Tablets, PCs, and power banks must be assigned through finance approval of a worker request.",
           },
           { status: 400 },
         );
@@ -477,7 +479,11 @@ export async function POST(request: Request) {
       let inserted = false;
 
       for (let attempt = 0; attempt < 5; attempt++) {
-        const assetTag = await generateAssetTag(serviceClient, category);
+        const assetTag = await generateAssetTag(
+          serviceClient,
+          category,
+          electronicsType,
+        );
 
         const { error } = await serviceClient.from("assets").insert({
           asset_tag: assetTag,

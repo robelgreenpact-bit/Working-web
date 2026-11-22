@@ -195,7 +195,9 @@ export default function NewRequestPage() {
 
   const isEquipment =
     form.type === "electronics" &&
-    ["tablet", "pc"].includes(form.electronics_subcategory);
+    ["tablet", "pc", "power_bank"].includes(
+      form.electronics_subcategory,
+    );
 
   const needsJustification = [
     "electronics",
@@ -203,7 +205,7 @@ export default function NewRequestPage() {
     "other_asset",
   ].includes(form.type);
 
-  // Tablet/PC requests do not require an item name.
+  // Equipment requests do not require an item name.
   // Preserve item names for the other existing request types.
   const needsItemName =
     ["physical_good", "other_asset"].includes(form.type) ||
@@ -232,7 +234,7 @@ export default function NewRequestPage() {
     }
   }
 
-  // No item-name request is made for Tablet or PC.
+  // No item-name request is made for Tablet, PC, or Power bank.
   const namesUrl = canLoadNames
     ? `/api/assets/item-names?${params.toString()}`
     : "";
@@ -321,7 +323,7 @@ export default function NewRequestPage() {
 
     if (
       form.type === "electronics" &&
-      !["tablet", "pc", "other"].includes(
+      !["tablet", "pc", "power_bank", "other"].includes(
         form.electronics_subcategory,
       )
     ) {
@@ -382,7 +384,7 @@ export default function NewRequestPage() {
     }
 
     const submissionTitle = isEquipment
-      ? `${form.electronics_subcategory === "tablet" ? "Tablet" : "PC"} request`
+      ? `${form.electronics_subcategory === "tablet" ? "Tablet" : form.electronics_subcategory === "pc" ? "PC" : "Power bank"} request`
       : form.type === "electronics"
         ? `${requestedItemName} request`
         : form.title.trim();
@@ -413,7 +415,7 @@ export default function NewRequestPage() {
         : form.asset_category,
     );
 
-    // Equipment is requested by Tablet/PC type only.
+    // Equipment is requested by subtype only.
     // Do not send a placeholder item name or requested_item_name.
     if (needsItemName) {
       formData.append("item_name", requestedItemName);
@@ -571,6 +573,7 @@ export default function NewRequestPage() {
                   <option value="">Select type</option>
                   <option value="tablet">Tablet</option>
                   <option value="pc">PC</option>
+                  <option value="power_bank">Power bank</option>
                   <option value="other">Other</option>
                 </select>
               </label>
@@ -867,7 +870,9 @@ export default function NewRequestPage() {
                 finance selects the requested number of available{" "}
                 {form.electronics_subcategory === "tablet"
                   ? "tablets"
-                  : "PCs"}{" "}
+                  : form.electronics_subcategory === "pc"
+                    ? "PCs"
+                    : "power banks"}{" "}
                 from inventory. You do not need to choose a brand,
                 item name or individual device.
               </div>

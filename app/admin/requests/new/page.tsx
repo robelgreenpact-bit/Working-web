@@ -246,6 +246,7 @@ export default function NewRequestPage() {
                 <option value="">— Select type —</option>
                 <option value="tablet">Tablet</option>
                 <option value="pc">PC</option>
+                <option value="power_bank">Power bank</option>
                 <option value="other">Other</option>
               </select>
             </div>

@@ -60,7 +60,7 @@ const statusLabels: Record<string, string> = {
 function isEquipment(request: RequestRow) {
   return (
     request.type === "electronics" &&
-    ["tablet", "pc"].includes(
+    ["tablet", "pc", "power_bank"].includes(
       request.electronics_subcategory || "",
     )
   );
@@ -81,6 +81,7 @@ function formatDate(value: string) {
 function equipmentTypeLabel(value: string | null | undefined) {
   if (value === "tablet") return "Tablet";
   if (value === "pc") return "PC";
+  if (value === "power_bank") return "Power bank";
   if (value === "other") return "Other electronics";
   return "Not recorded";
 }

@@ -19,6 +19,7 @@ export const ACTIVE_ASSET_LOAN_STATUSES = [
 
 const categoryPrefixes: Record<string, string> = {
   electronics: "GPEL",
+  power_bank: "GPPB",
   furniture: "GPFU",
   vehicle: "GPVE",
   office_supplies: "GPOF",
@@ -28,8 +29,14 @@ const categoryPrefixes: Record<string, string> = {
 export async function generateAssetTag(
   supabase: SupabaseClient,
   category: string,
+  electronicsSubtype?: string | null,
 ): Promise<string> {
-  const prefix = categoryPrefixes[category] || categoryPrefixes.other;
+  const sequenceCategory =
+    category === "electronics" && electronicsSubtype === "power_bank"
+      ? "power_bank"
+      : category;
+  const prefix =
+    categoryPrefixes[sequenceCategory] || categoryPrefixes.other;
 
   let highestNumber = 0;
   let offset = 0;
@@ -92,7 +99,7 @@ export async function generateAssetTag(
     .from("asset_tag_sequence")
     .upsert(
       {
-        category,
+        category: sequenceCategory,
         last_number: nextNumber,
       },
       {

@@ -56,6 +56,7 @@ ALTER TABLE assets
   ADD CONSTRAINT assets_electronics_serial_required
   CHECK (
     category IS DISTINCT FROM 'electronics'
+    OR electronics_subcategory IS NOT DISTINCT FROM 'power_bank'
     OR NULLIF(BTRIM(serial_number), '') IS NOT NULL
   ) NOT VALID;
 
@@ -155,7 +156,7 @@ BEGIN
     selected_count := COALESCE(CARDINALITY(p_asset_ids), 0);
     IF request_row.type = 'electronics' THEN
       IF selected_count <> required_count OR COALESCE(p_purchase_quantity, 0) <> 0 THEN
-        RAISE EXCEPTION 'Select one inventory unit for every requested tablet or PC';
+        RAISE EXCEPTION 'Select one inventory unit for every requested device';
       END IF;
     ELSIF selected_count <> 0 OR COALESCE(p_purchase_quantity, -1) <> required_count THEN
       RAISE EXCEPTION 'Non-electronics durable requests must use the purchase fulfillment flow';
@@ -195,7 +196,10 @@ BEGIN
               selected_asset.electronics_subcategory IS NOT DISTINCT FROM request_row.electronics_subcategory
               OR request_row.electronics_subcategory IS NULL
             )
-            AND NULLIF(BTRIM(selected_asset.serial_number), '') IS NOT NULL
+            AND (
+              selected_asset.electronics_subcategory IS NOT DISTINCT FROM 'power_bank'
+              OR NULLIF(BTRIM(selected_asset.serial_number), '') IS NOT NULL
+            )
           )
         )
         AND NOT EXISTS (
@@ -334,6 +338,7 @@ DECLARE
   new_loan_request_id UUID;
   new_loan_id UUID;
   asset_category TEXT;
+  sequence_category TEXT;
   prefix TEXT;
   input_serial TEXT;
   generated_asset_tag TEXT;
@@ -357,7 +362,9 @@ BEGIN
   IF request_row.type = 'electronics' AND request_row.electronics_subcategory IS NULL THEN
     RAISE EXCEPTION 'Electronics type is required before registering units';
   END IF;
-  IF p_serial_numbers IS NULL OR CARDINALITY(p_serial_numbers) = 0 THEN
+  IF request_row.type = 'electronics'
+    AND request_row.electronics_subcategory <> 'power_bank'
+    AND (p_serial_numbers IS NULL OR CARDINALITY(p_serial_numbers) = 0) THEN
     RAISE EXCEPTION 'Enter at least one serial number';
   END IF;
 
@@ -365,26 +372,52 @@ BEGIN
   WHERE request_id = p_request_id AND source = 'purchase';
   SELECT COUNT(*) INTO total_assigned_count FROM request_assets
   WHERE request_id = p_request_id;
-  new_count := CARDINALITY(p_serial_numbers);
+  new_count := CASE
+    WHEN request_row.type = 'electronics'
+      AND request_row.electronics_subcategory = 'power_bank'
+      AND (p_serial_numbers IS NULL OR CARDINALITY(p_serial_numbers) = 0)
+    THEN GREATEST(COALESCE(request_row.purchase_quantity, 0) - existing_purchase_count, 0)
+    ELSE CARDINALITY(p_serial_numbers)
+  END;
   IF existing_purchase_count + new_count > COALESCE(request_row.purchase_quantity, 0)
     OR total_assigned_count + new_count > GREATEST(COALESCE(request_row.quantity, 1), 1) THEN
     RAISE EXCEPTION 'More units were entered than remain on this purchase request';
   END IF;
-  IF EXISTS (
+  IF request_row.electronics_subcategory IS DISTINCT FROM 'power_bank'
+    AND EXISTS (
     SELECT 1 FROM UNNEST(p_serial_numbers) AS incoming(value)
     WHERE NULLIF(BTRIM(value), '') IS NULL
-  ) OR CARDINALITY(ARRAY(SELECT DISTINCT LOWER(BTRIM(value)) FROM UNNEST(p_serial_numbers) AS incoming(value))) <> new_count THEN
+  ) THEN
+    RAISE EXCEPTION 'Every unit needs a unique serial number';
+  END IF;
+  IF request_row.electronics_subcategory IS DISTINCT FROM 'power_bank'
+    AND CARDINALITY(ARRAY(SELECT DISTINCT LOWER(BTRIM(value)) FROM UNNEST(p_serial_numbers) AS incoming(value))) <> new_count THEN
     RAISE EXCEPTION 'Every unit needs a unique serial number';
   END IF;
 
   asset_category := COALESCE(request_row.asset_category, CASE WHEN request_row.type = 'electronics' THEN 'electronics' ELSE 'other' END);
+  sequence_category := CASE
+    WHEN asset_category = 'electronics' AND request_row.electronics_subcategory = 'power_bank'
+      THEN 'power_bank'
+    ELSE asset_category
+  END;
   prefix := CASE asset_category
-    WHEN 'electronics' THEN 'GPEL'
+    WHEN 'electronics' THEN
+      CASE WHEN request_row.electronics_subcategory = 'power_bank' THEN 'GPPB' ELSE 'GPEL' END
     WHEN 'furniture' THEN 'GPFU'
     WHEN 'vehicle' THEN 'GPVE'
     WHEN 'office_supplies' THEN 'GPOF'
     ELSE 'GPOT'
   END;
+
+  IF request_row.type = 'electronics'
+    AND request_row.electronics_subcategory = 'power_bank'
+    AND (p_serial_numbers IS NULL OR CARDINALITY(p_serial_numbers) = 0) THEN
+    p_serial_numbers := ARRAY(
+      SELECT NULL::TEXT
+      FROM generate_series(1, GREATEST(new_count, 0))
+    );
+  END IF;
 
   IF request_row.fulfillment_mode = 'lend' THEN
     SELECT approver_id INTO manager_id FROM approvals
@@ -414,7 +447,7 @@ BEGIN
 
     LOOP
       INSERT INTO asset_tag_sequence (category, last_number)
-      VALUES (asset_category, 1)
+      VALUES (sequence_category, 1)
       ON CONFLICT (category) DO UPDATE
         SET last_number = asset_tag_sequence.last_number + 1
       RETURNING last_number INTO next_number;
@@ -464,12 +497,20 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM assets
     WHERE request_id = p_request_id AND category = 'electronics'
+      AND electronics_subcategory IS DISTINCT FROM 'power_bank'
       AND NULLIF(BTRIM(serial_number), '') IS NULL
   ) THEN
     RAISE EXCEPTION 'Electronics cannot be registered without serial numbers';
   END IF;
 
-  SELECT STRING_AGG(asset_tag || ' (SN ' || serial_number || ')', ', ' ORDER BY asset_tag)
+  SELECT STRING_AGG(
+    asset_tag ||
+    CASE WHEN NULLIF(BTRIM(serial_number), '') IS NOT NULL
+      THEN ' (SN ' || serial_number || ')'
+      ELSE ''
+    END,
+    ', ' ORDER BY asset_tag
+  )
   INTO item_list
   FROM jsonb_to_recordset(created_assets) AS units(asset_tag TEXT, serial_number TEXT);
 

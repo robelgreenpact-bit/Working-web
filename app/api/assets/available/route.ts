@@ -19,7 +19,7 @@ const VALID_CATEGORIES = [
   "other",
 ];
 
-const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "other"];
+const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "power_bank", "other"];
 
 type AvailableAsset = {
   id: string;

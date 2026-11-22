@@ -80,7 +80,9 @@ function isEquipment(asset: {
 }) {
   return (
     asset.category === "electronics" &&
-    ["tablet", "pc"].includes(asset.electronics_subcategory || "")
+    ["tablet", "pc", "power_bank"].includes(
+      asset.electronics_subcategory || "",
+    )
   );
 }
 
@@ -311,7 +313,11 @@ export default function AssetsPage() {
       return;
     }
 
-    if (equipmentForm && !form.serial_number.trim()) {
+    if (
+      equipmentForm &&
+      form.electronics_subcategory !== "power_bank" &&
+      !form.serial_number.trim()
+    ) {
       setError("Enter the serial number for this device.");
       return;
     }
@@ -339,6 +345,7 @@ export default function AssetsPage() {
 
     if (
       equipmentForm &&
+      serial &&
       assets.some(
         (asset) =>
           asset.id !== editingId &&
@@ -365,7 +372,7 @@ export default function AssetsPage() {
     };
 
     if (equipmentForm) {
-      // A Tablet or PC is always one physical device per record.
+      // Tablets, PCs, and power banks are each one physical device per record.
       payload.quantity = 1;
 
       // New devices start unassigned.
@@ -558,7 +565,7 @@ export default function AssetsPage() {
               Asset Registry
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Register each Tablet or PC once, as an individual device.
+              Register each Tablet, PC, or Power bank once, as an individual device.
             </p>
           </div>
 
@@ -690,6 +697,7 @@ export default function AssetsPage() {
                     <option value="">Select type</option>
                     <option value="tablet">Tablet</option>
                     <option value="pc">PC</option>
+                    <option value="power_bank">Power bank</option>
                     <option value="other">Other</option>
                   </select>
                 </label>
@@ -722,9 +730,12 @@ export default function AssetsPage() {
               </label>
 
               <label className="text-sm font-medium text-gray-700">
-                Serial number {equipmentForm ? "" : "(optional)"}
+                Serial number {equipmentForm && form.electronics_subcategory !== "power_bank" ? "" : "(optional)"}
                 <input
-                  required={equipmentForm}
+                  required={
+                    equipmentForm &&
+                    form.electronics_subcategory !== "power_bank"
+                  }
                   type="text"
                   value={form.serial_number}
                   onChange={(event) =>
@@ -987,6 +998,7 @@ export default function AssetsPage() {
                 <option value="all">All types</option>
                 <option value="tablet">Tablet</option>
                 <option value="pc">PC</option>
+                <option value="power_bank">Power bank</option>
                 <option value="other">Other electronics</option>
               </select>
             </label>

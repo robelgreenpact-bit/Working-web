@@ -5,4 +5,4 @@ ALTER TABLE assets
 ADD COLUMN electronics_subcategory VARCHAR(50);
 
 -- Add comment to document the purpose
-COMMENT ON COLUMN assets.electronics_subcategory IS 'Subcategory for electronics items (tablet, pc, other)';
+COMMENT ON COLUMN assets.electronics_subcategory IS 'Subcategory for electronics items (tablet, pc, power_bank, other)';

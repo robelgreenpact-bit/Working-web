@@ -55,7 +55,7 @@ const statusColors: Record<string, string> = {
 function isEquipment(request: RequestRow) {
   return (
     request.type === "electronics" &&
-    ["tablet", "pc"].includes(
+    ["tablet", "pc", "power_bank"].includes(
       request.electronics_subcategory || "",
     )
   );
@@ -415,7 +415,10 @@ export default function WorkerPage() {
                                   : request.electronics_subcategory ===
                                       "tablet"
                                     ? "Tablet"
-                                    : "Other"}
+                                    : request.electronics_subcategory ===
+                                        "power_bank"
+                                      ? "Power bank"
+                                      : "Other"}
                               </>
                             )}
                         </p>

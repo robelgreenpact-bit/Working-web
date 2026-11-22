@@ -20,7 +20,7 @@ const VALID_ASSET_CATEGORIES = [
   "other",
 ];
 
-const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "other"];
+const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "power_bank", "other"];
 
 type ApprovalRow = {
   decision: string;
@@ -121,12 +121,12 @@ export async function POST(request: Request) {
       type === "electronics" &&
       !VALID_ELECTRONICS_TYPES.includes(electronicsType)
     ) {
-      return fail("Select Tablet, PC, or Other electronics.");
+      return fail("Select Tablet, PC, Power bank, or Other electronics.");
     }
 
     const isEquipment =
       type === "electronics" &&
-      ["tablet", "pc"].includes(electronicsType);
+      ["tablet", "pc", "power_bank"].includes(electronicsType);
 
     const needsAssetDetails = [
       "physical_good",
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
       "other_asset",
     ].includes(type);
 
-    // Tablet/PC requests are matched by subtype only.
+    // Equipment requests are matched by subtype only.
     const needsItemName = needsAssetDetails && !isEquipment;
 
     const needsCost = ![
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
     let quantity: number | null = null;
 
     if (needsAssetDetails || needsCost) {
-      // Never silently substitute a quantity for Tablet/PC.
+      // Never silently substitute a quantity for equipment.
       if (isEquipment && !quantityText) {
         return fail("Enter the number of devices requested.");
       }
@@ -262,7 +262,7 @@ export async function POST(request: Request) {
     }
 
     const title = isEquipment
-      ? `${electronicsType === "tablet" ? "Tablet" : "PC"} request`
+      ? `${electronicsType === "tablet" ? "Tablet" : electronicsType === "pc" ? "PC" : "Power bank"} request`
       : type === "electronics"
         ? `${canonicalItemName} request`
         : submittedTitle;

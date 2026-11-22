@@ -68,22 +68,23 @@ function itemName(request: RequestRow) {
 function isEquipment(request: RequestRow) {
   return (
     request.type === "electronics" &&
-    ["tablet", "pc"].includes(
+    ["tablet", "pc", "power_bank"].includes(
       request.electronics_subcategory || "",
     )
   );
 }
 
 function equipmentLabel(request: RequestRow) {
-  return request.electronics_subcategory === "tablet"
-    ? "Tablets"
-    : "PCs";
+  if (request.electronics_subcategory === "tablet") return "Tablets";
+  if (request.electronics_subcategory === "pc") return "PCs";
+  if (request.electronics_subcategory === "power_bank") return "Power banks";
+  return "Devices";
 }
 
 function hasUnknownElectronicsType(request: RequestRow) {
   return (
     request.type === "electronics" &&
-    !["tablet", "pc", "other"].includes(
+    !["tablet", "pc", "power_bank", "other"].includes(
       request.electronics_subcategory || "",
     )
   );
@@ -757,7 +758,7 @@ export default function FinancePage() {
                           This request has a missing or invalid quantity.
                           Ask the worker to resubmit it with the number
                           of devices required. Item names are not
-                          required for Tablet or PC requests.
+                          required for Tablet, PC, or Power bank requests.
                         </p>
                       )}
 

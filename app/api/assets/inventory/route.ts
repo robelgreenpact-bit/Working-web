@@ -355,7 +355,7 @@ export async function GET() {
 
       const itemName = asset.item_name?.trim() || null;
 
-      // Tablets and PCs remain separate even if their names match.
+      // Electronics subtypes remain separate even if their names match.
       const groupKey = JSON.stringify([
         category,
         electronicsType,

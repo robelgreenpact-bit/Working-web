@@ -10,7 +10,7 @@ const VALID_CATEGORIES = [
   "other",
 ];
 
-const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "other"];
+const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "power_bank", "other"];
 
 function getServiceClient() {
   return createServiceClient(
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
       !VALID_ELECTRONICS_TYPES.includes(subcategory)
     ) {
       return NextResponse.json(
-        { error: "Select Tablet, PC, or Other electronics." },
+        { error: "Select Tablet, PC, Power bank, or Other electronics." },
         { status: 400 },
       );
     }

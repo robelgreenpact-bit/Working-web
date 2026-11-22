@@ -11,7 +11,7 @@ const VALID_CATEGORIES = [
   "other",
 ];
 
-const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "other"];
+const VALID_ELECTRONICS_TYPES = ["tablet", "pc", "power_bank", "other"];
 
 const VALID_STATUSES = [
   "new",
@@ -53,7 +53,7 @@ function isEquipment(
 ): boolean {
   return (
     category === "electronics" &&
-    ["tablet", "pc"].includes(String(electronicsType || ""))
+    ["tablet", "pc", "power_bank"].includes(String(electronicsType || ""))
   );
 }
 
@@ -283,7 +283,7 @@ export async function PATCH(
       category === "electronics" &&
       !VALID_ELECTRONICS_TYPES.includes(electronicsType)
     ) {
-      return fail("Select Tablet, PC, or Other electronics.");
+      return fail("Select Tablet, PC, Power bank, or Other electronics.");
     }
 
     if (category !== "electronics") {
@@ -297,7 +297,7 @@ export async function PATCH(
 
     const willBeEquipment = isEquipment(category, electronicsType);
 
-    // No direct reassignment or silent release of Tablet/PC holders.
+    // No direct reassignment or silent release of equipment holders.
     if (
       (wasEquipment || willBeEquipment) &&
       "assigned_to" in updates &&
@@ -317,13 +317,13 @@ export async function PATCH(
       cleanText(asset.assigned_to)
     ) {
       return fail(
-        "Resolve this asset's existing assignment before changing it to a Tablet or PC.",
+        "Resolve this asset's existing assignment before changing it to equipment.",
         409,
       );
     }
 
     if (willBeEquipment) {
-      if (!serialNumber) {
+      if (electronicsType !== "power_bank" && !serialNumber) {
         return fail("A serial number is required for this device.");
       }
 
@@ -336,7 +336,7 @@ export async function PATCH(
         Number(updates.quantity) !== 1
       ) {
         return fail(
-          "Each Tablet or PC record must represent exactly one device.",
+          "Each equipment record must represent exactly one device.",
         );
       }
 

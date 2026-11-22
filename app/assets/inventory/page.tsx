@@ -42,6 +42,7 @@ const categoryLabels: Record<string, string> = {
 const typeLabels: Record<string, string> = {
   tablet: "Tablet",
   pc: "PC",
+  power_bank: "Power bank",
   other: "Other electronics",
 };
 
@@ -112,6 +113,13 @@ function displayName(asset: InventoryAsset) {
     asset.electronics_subcategory === "pc"
   ) {
     return "PC";
+  }
+
+  if (
+    asset.category === "electronics" &&
+    asset.electronics_subcategory === "power_bank"
+  ) {
+    return "Power bank";
   }
 
   return asset.item_name?.trim() || "Unnamed item";
@@ -579,6 +587,7 @@ export default function InventoryPage() {
                 <option value="all">All types</option>
                 <option value="tablet">Tablet</option>
                 <option value="pc">PC</option>
+                <option value="power_bank">Power bank</option>
                 <option value="other">Other electronics</option>
               </select>
             </label>
