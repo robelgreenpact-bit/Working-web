@@ -73,7 +73,13 @@ export async function GET() {
 
     const canManage = ["finance", "admin"].includes(profile.role);
 
-    // The equipment_loans SELECT policy must permit all four roles
+    // Admin, finance and manager see all history.
+    // Everyone else sees only their own returned items.
+    const canSeeAllHistory = ["admin", "finance", "manager"].includes(
+      profile.role,
+    );
+
+    // The equipment_loans SELECT policy must permit all roles
     // to read the shared borrowed list.
     function getLoansPage(offset: number) {
       return supabase
@@ -132,13 +138,21 @@ export async function GET() {
       offset += 100;
     }
 
+    // Everyone sees current borrowing. Returned history is limited
+    // to the borrower unless the user is admin, finance or manager.
+    const visibleLoans = canSeeAllHistory
+      ? loans
+      : loans.filter(
+          (loan) => !loan.returned_at || loan.borrower_id === user.id,
+        );
+
     const serviceClient = getServiceClient();
 
     const assetIds = [
-      ...new Set(loans.map((loan) => loan.asset_id)),
+      ...new Set(visibleLoans.map((loan) => loan.asset_id)),
     ];
     const borrowerIds = [
-      ...new Set(loans.map((loan) => loan.borrower_id)),
+      ...new Set(visibleLoans.map((loan) => loan.borrower_id)),
     ];
 
     const assetsById = new Map<string, AssetDetails>();
@@ -202,7 +216,7 @@ export async function GET() {
     const now = Date.now();
     const millisecondsPerDay = 24 * 60 * 60 * 1000;
 
-    const results = loans.map((loan) => {
+    const results = visibleLoans.map((loan) => {
       const asset = assetsById.get(loan.asset_id);
       const isMine = loan.borrower_id === user.id;
 
@@ -297,6 +311,7 @@ export async function GET() {
       current_user_id: user.id,
       role: profile.role,
       can_manage: canManage,
+      can_see_all_history: canSeeAllHistory,
       summary: {
         all_borrowed: results.filter(
           (loan) => loan.status !== "returned",
