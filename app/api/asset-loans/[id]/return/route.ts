@@ -45,12 +45,12 @@ export async function POST(
       return json({ error: "Unable to verify your role." }, 500);
     }
 
-    if (!profile || profile.role !== "worker") {
-      return json(
-        { error: "Only workers can request returns here." },
-        403,
-      );
-    }
+   if (profile.role !== "worker") {
+  return json(
+    { error: "Only workers can request returns here." },
+    403,
+  );
+}
 
     let body: Record<string, unknown>;
 
