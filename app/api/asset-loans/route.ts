@@ -254,10 +254,7 @@ export async function GET() {
         return_condition: loan.return_condition,
         is_mine: isMine,
 
-        can_return:
-          profile.role === "worker" &&
-          isMine &&
-          status === "borrowed",
+        can_return: isMine && status === "borrowed",
 
         can_confirm_return:
           canManage && status === "return_requested",
